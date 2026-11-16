@@ -1,0 +1,592 @@
+import type { Dictionary } from "@/i18n/types";
+
+export const en: Dictionary = {
+  common: {
+    appName: "Faya-Studio",
+    tagline: "Create. Develop. Innovate.",
+    viewAll: "View all",
+    open: "Open",
+    use: "Use",
+    createApp: "Create an app",
+    backToDashboard: "Back to dashboard",
+    credits: "credits",
+    administrator: "Administrator",
+    modified: "Modified",
+    demo: "Demo",
+    desktop: "Desktop",
+    mobile: "Mobile",
+    openMenu: "Open menu",
+    closeMenu: "Close menu",
+    navigationMenu: "Navigation menu",
+    mainNavigation: "Main navigation",
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    delete: "Delete",
+    rename: "Rename",
+    duplicate: "Duplicate",
+    create: "Create",
+    search: "Search",
+    status: "Status",
+    lastActivity: "Last activity",
+    actions: "Actions",
+    close: "Close",
+    noResults: "No results.",
+    copySuffix: "copy",
+    details: "Details",
+    created: "Created",
+    back: "Back",
+  },
+  nav: {
+    home: "Home",
+    projects: "My projects",
+    applications: "Applications",
+    templates: "Templates",
+    credits: "AI credits",
+    settings: "Settings",
+    help: "Help",
+  },
+  sidebar: {
+    proTitleLine1: "Upgrade to",
+    proTitleLine2: "Pro",
+    proSubtitleLine1: "More credits,",
+    proSubtitleLine2: "more power!",
+    discover: "Discover",
+  },
+  topbar: {
+    organizations: "Organizations",
+    createOrganization: "Create an organization",
+    availableBalance: "Available balance",
+    rechargeCredits: "Buy credits",
+    usageHistory: "Usage history",
+    notifications: "Notifications",
+    unread: "unread",
+    markAllRead: "Mark all as read",
+    userMenu: "User menu",
+    profile: "Profile",
+    settings: "Settings",
+    signOut: "Sign out",
+    plans: {
+      pro: "Pro plan",
+      starter: "Starter plan",
+    },
+  },
+  language: {
+    label: "Language",
+    fr: "Français",
+    en: "English",
+    switchTo: "Change language",
+  },
+  dashboard: {
+    greetingPrefix: "Welcome to",
+    appNameExclamation: "Faya-Studio!",
+    subtitle:
+      "Describe your idea, and our AI agent builds a complete application for you.",
+    promptPlaceholderLine1: "Example: Create a stock management app",
+    promptPlaceholderLine2: "with search and PDF export...",
+    promptAria: "Describe the app you want to create",
+    createApp: "Create my app",
+    voiceInput: "Voice input",
+    moreExamples: "More examples...",
+    fewerExamples: "Fewer examples",
+    recentProjects: "Your recent projects",
+    appTemplates: "App templates",
+    emptyProjectsTitle: "Your projects will appear here",
+    emptyProjectsDescription:
+      "Describe your first app in the box above to get started.",
+  },
+  projectNames: {
+    stock: "Stock Management",
+    invoicing: "Invoicing",
+    crm: "CRM",
+    tasks: "Task Management",
+    expenses: "Expense Tracking",
+    planning: "Team Planning",
+    generic: "New app",
+  },
+  auth: {
+    brandTitle: "Build your business software with AI.",
+    brandSubtitle:
+      "Describe what you need. The agent designs, builds and verifies your app.",
+    brandBullet1: "No code required",
+    brandBullet2: "Exportable apps",
+    brandBullet3: "Isolated environments",
+    loginTitle: "Sign in",
+    loginSubtitle: "Access your apps and projects.",
+    registerTitle: "Create an account",
+    registerSubtitle: "Start building your software workspace.",
+    email: "Email address",
+    password: "Password",
+    firstName: "First name",
+    lastName: "Last name",
+    workspaceName: "Workspace name",
+    workspaceNamePlaceholder: "My company",
+    workspaceNameHint: "Leave blank to create a personal workspace.",
+    signIn: "Sign in",
+    signingIn: "Signing in…",
+    createAccount: "Create my account",
+    creatingAccount: "Creating…",
+    noAccount: "Don't have an account yet?",
+    hasAccount: "Already have an account?",
+    goToRegister: "Create an account",
+    goToLogin: "Sign in",
+    demoTitle: "Demo account",
+    demoHint: "demo@faya-studio.app / demo1234",
+    passwordHint: "At least 8 characters",
+    personalWorkspace: "{name}'s workspace",
+    errors: {
+      invalidCredentials: "Invalid email or password.",
+      emailTaken: "An account already exists with this email address.",
+      invalidEmail: "Invalid email address.",
+      passwordTooShort: "Password must be at least 8 characters.",
+      missingFields: "Please fill in all required fields.",
+      generic: "Something went wrong. Please try again.",
+    },
+  },
+  projectsPage: {
+    eyebrow: "Workspace",
+    title: "My projects",
+    description:
+      "Group your applications and keep all your projects in one place.",
+    newProject: "New project",
+    searchPlaceholder: "Search projects...",
+    emptyTitle: "No projects yet",
+    emptyDescription:
+      "Create your first project to start building your software workspace.",
+    total: "{count} projects",
+    ready: "{count} ready",
+    createTitle: "Create a project",
+    createDescription:
+      "Describe the app you want to create. The agent will name it and prepare its structure.",
+    creating: "Creating...",
+    promptLabel: "Describe your app",
+    promptPlaceholder:
+      "Example: Create an invoicing app with quotes and PDF export...",
+    renameTitle: "Rename project",
+    renameLabel: "Project name",
+    deleteTitle: "Delete project",
+    deleteDescription:
+      "This will permanently delete the project and its preview. This cannot be undone.",
+    deleted: "Project deleted.",
+    renamed: "Project renamed.",
+    duplicated: "Project duplicated.",
+    noResults: "No projects match your search.",
+  },
+  applicationsPage: {
+    eyebrow: "Your workspace",
+    title: "Applications",
+    description:
+      "Find all the applications in your organization, open them and view their details.",
+    emptyTitle: "No applications yet",
+    emptyDescription: "Apps created from a project will appear here.",
+    details: "Details",
+    versionsTitle: "Versions",
+    versionsDescription:
+      "This app's version history will be available soon.",
+    usersTitle: "Users",
+    usersDescription:
+      "User and permission management will be available soon.",
+    connectionsTitle: "Connections",
+    connectionsDescription:
+      "Connections with other apps will be available soon.",
+    backToApplications: "Back to applications",
+    createdLabel: "Created on",
+    lastActivityLabel: "Last activity",
+    promptLabel: "Description",
+  },
+  creditsPage: {
+    eyebrow: "Usage",
+    title: "AI credits",
+    description:
+      "Track your balance, plan usage and operation history.",
+    available: "Available credits",
+    usedThisMonth: "Used this month",
+    plan: "Current plan",
+    transactions: "Credit history",
+    transactionsDescription: "Credit movements for your organization.",
+    empty: "No credit transactions yet.",
+    date: "Date",
+    reason: "Operation",
+    amount: "Amount",
+    recharge: "Buy credits",
+    upgrade: "Upgrade to Pro",
+    note: "Generation is still simulated: no credits are charged yet.",
+  },
+  settingsPage: {
+    eyebrow: "Configuration",
+    title: "Settings",
+    description: "Manage your profile, organization and preferences.",
+    profile: "Profile",
+    profileDescription: "The information displayed in your workspace.",
+    emailReadonlyHint: "Email cannot be changed yet.",
+    organization: "Organization",
+    organizationDescription: "Your workspace name and plan.",
+    organizationName: "Organization name",
+    plan: "Plan",
+    members: "Members",
+    membersDescription:
+      "The people who have access to this organization.",
+    role: "Role",
+    language: "Language",
+    languageDescription:
+      "The interface language is saved to your account.",
+    security: "Security & session",
+    securityDescription:
+      "Your session is protected by an HTTP-only cookie.",
+    currentSession: "Active session",
+    logout: "Sign out",
+    invite: "Invite a member",
+    inviteComingSoon: "Invitations will be available soon.",
+    saved: "Changes saved.",
+    error: "Could not save changes.",
+    roles: {
+      owner: "Owner",
+      admin: "Administrator",
+      member: "Member",
+    },
+  },
+  creditReasons: {
+    initial: "Initial credits",
+    welcome: "Welcome credits",
+    generation: "App generation",
+    modification: "App modification",
+    recharge: "Credit top-up",
+  },
+  editor: {
+    backAria: "Back to dashboard",
+    defaultProjectName: "Stock Management",
+    generatedBy: "App generated by Faya-Studio",
+    generating: "Generating",
+    ready: "Ready",
+    step: "Step {current}/{total}",
+    complete: "Complete",
+    progressAria: "Generation progress",
+    desktopPreview: "Desktop preview",
+    mobilePreview: "Mobile preview",
+    export: "Export",
+    publish: "Publish",
+    conversation: "Conversation",
+    preview: "Preview",
+    agentName: "AI agent",
+    agentWorking: "Working on your app...",
+    agentAvailable: "Available",
+    agentProgress: "Agent progress",
+    composerPlaceholder: "Request a change...",
+    composerBusy: "The agent is working on your app...",
+    sendHint: "Enter to send · Shift+Enter for a new line",
+    sendHintBusy: "Available once generation is complete",
+    sendAria: "Send message",
+    messageAria: "Message to the AI agent",
+    livePreview: "Live preview",
+    buildingApp: "The agent is building your app...",
+    demoNote: "Demo preview · App generated by Faya-Studio",
+    loading: "Preparing the editor...",
+    exportRunning: "Generation is in progress...",
+    exportRunningDescription:
+      "You will be able to export the app once it is ready.",
+    exportComingSoon: "Export will be available in the full version.",
+    exportDialog: {
+      title: "Export as a Windows app",
+      description:
+        "The app is packaged in Faya-Studio's Tauri 2 runtime with a local SQLite database.",
+      sqliteNote: "Windows executable · data stored on the device",
+      start: "Build the executable",
+      starting: "Starting the build…",
+      queued: "Waiting for the build worker…",
+      building: "Compiling the Windows application…",
+      buildHint: "The build can take several minutes.",
+      done: "Application ready",
+      doneHint: "Download the executable and run it on Windows.",
+      download: "Download the EXE",
+      retry: "Rebuild",
+      close: "Close",
+      errorTitle: "The build failed",
+      errorHint: "Check the build output, then try again.",
+      notReady: "Generate the app before exporting it.",
+      pollError: "Unable to read the build status.",
+      duration: "Build finished in {seconds}s",
+      size: "{size} MB",
+    },
+    publishRunningDescription:
+      "Wait for generation to finish before publishing.",
+    publishComingSoon: "Publishing will be available in the full version.",
+    failed: "Failed",
+    realProgress: "Generating app",
+    queued: "Waiting for the agent...",
+    activity: "Agent activity",
+    previewNotReady: "The preview will appear once the app is ready.",
+    noPreview: "No generated preview for this project.",
+    generateNow: "Generate the app",
+    retry: "Retry generation",
+    openPreview: "Open in a new tab",
+    generatedSummary: "App generated",
+    modificationsSoon:
+      "Conversation-based changes will be connected in the next step.",
+    errorTitle: "Generation failed",
+    errorHint: "You can retry the generation.",
+    tools: {
+      list_files: "Exploring files",
+      read_file: "Reading a file",
+      write_file: "Writing a file",
+      run_checks: "Validation",
+      finish: "Finalization",
+    },
+  },
+  projectMenu: {
+    open: "Open",
+    rename: "Rename",
+    duplicate: "Duplicate",
+    delete: "Delete",
+    optionsAria: "Options for {name}",
+  },
+  sections: {
+    inPreparation: "In preparation",
+    prototypeNote:
+      "This section is part of the prototype. The features will be connected in a future step.",
+    projets: {
+      title: "My projects",
+      eyebrow: "Organization",
+      description:
+        "Group your apps into projects to keep your workspace clear, even as your business grows.",
+      bullets: [
+        {
+          title: "Project organization",
+          description:
+            "Stock, invoicing, customers: bring together the apps that work side by side.",
+        },
+        {
+          title: "Detailed app pages",
+          description:
+            "Find the preview, users and settings for each app.",
+        },
+        {
+          title: "Version history",
+          description:
+            "Review changes and roll back to an earlier version in one click.",
+        },
+      ],
+    },
+    applications: {
+      title: "Applications",
+      eyebrow: "Your workspace",
+      description:
+        "All your apps in one place. Open them, track their status and manage their versions, access and deployment.",
+      bullets: [
+        {
+          title: "Preview and open",
+          description:
+            "Launch an app and test it directly from Faya-Studio.",
+        },
+        {
+          title: "Version management",
+          description:
+            "Track every change and restore a working version when needed.",
+        },
+        {
+          title: "Users and permissions",
+          description:
+            "Define exactly who can view, create or edit data.",
+        },
+      ],
+    },
+    modeles: {
+      title: "App templates",
+      eyebrow: "Marketplace",
+      description:
+        "Start from an existing template instead of from scratch. Install it in your workspace, then adapt it to your business with the AI agent.",
+      bullets: [
+        {
+          title: "Template library",
+          description:
+            "Discover ready-to-use templates for retail, services and industry.",
+        },
+        {
+          title: "Customization",
+          description:
+            "Change pages, colors and features to fit your needs.",
+        },
+        {
+          title: "One-click install",
+          description:
+            "Each template becomes a standalone app in your workspace.",
+        },
+      ],
+    },
+    credits: {
+      title: "AI credits",
+      eyebrow: "Usage",
+      description:
+        "AI-assisted generation and changes use credits. Track your balance and the details of every operation.",
+      bullets: [
+        {
+          title: "Balance and history",
+          description:
+            "Check your available balance and all your usage.",
+        },
+        {
+          title: "Per-operation details",
+          description:
+            "See which generations, changes and tests used credits.",
+        },
+        {
+          title: "Top-ups",
+          description:
+            "Add credits to your workspace or upgrade your plan.",
+        },
+      ],
+      stats: [
+        { label: "Available credits", value: "2,750" },
+        { label: "Used this month", value: "1,410" },
+        { label: "Renewal", value: "Dec 1" },
+      ],
+    },
+    parametres: {
+      title: "Settings",
+      eyebrow: "Configuration",
+      description:
+        "Configure your profile, organization, language and Faya-Studio workspace preferences.",
+      bullets: [
+        {
+          title: "Profile and organization",
+          description:
+            "Manage your information, organizations and team members.",
+        },
+        {
+          title: "Language and appearance",
+          description:
+            "Choose the interface language and display preferences.",
+        },
+        {
+          title: "Security and sync",
+          description:
+            "Control sessions, backups and synchronization settings.",
+        },
+      ],
+    },
+    aide: {
+      title: "Help & support",
+      eyebrow: "Support",
+      description:
+        "Need help creating your first app? Find guides, answers to common questions and the support team.",
+      bullets: [
+        {
+          title: "Help center",
+          description:
+            "Step-by-step guides to discover app creation and automations.",
+        },
+        {
+          title: "FAQ",
+          description:
+            "Answers about credits, versions and synchronization.",
+        },
+        {
+          title: "Responsive support",
+          description:
+            "Talk to our team when you need guidance.",
+        },
+      ],
+    },
+  },
+  stock: {
+    appName: "StockFlow",
+    tagline: "Stock management",
+    nav: {
+      dashboard: "Dashboard",
+      products: "Products",
+      movements: "Movements",
+      suppliers: "Suppliers",
+      reports: "Reports",
+    },
+    storage: "Storage",
+    storagePercent: "68%",
+    productsTracked: "2,480 products tracked",
+    searchPlaceholder: "Search for a product, a reference...",
+    overview: "Overview",
+    dashboardTitle: "Dashboard",
+    greeting: "Hello Jean, here is your stock overview for today.",
+    newProduct: "New product",
+    newProductShort: "New",
+    kpis: {
+      activeProducts: "Active products",
+      stockValue: "Stock value",
+      stockAlerts: "Stock alerts",
+      movementsToday: "Today's movements",
+      thisMonth: "this month",
+      vsMay: "vs May",
+      sinceYesterday: "since yesterday",
+      inOut: "inbound / outbound",
+      trendActive: "+12",
+      trendStockValue: "+8.2%",
+      trendAlerts: "-2",
+      trendMovements: "+5",
+    },
+    chart: {
+      title: "Stock value",
+      subtitle: "Change over the last 6 months",
+      period: "6 months",
+    },
+    alerts: {
+      title: "Stock alerts",
+    },
+    table: {
+      title: "Recent products",
+      subtitle: "Latest catalog updates",
+      product: "Product",
+      sku: "SKU",
+      category: "Category",
+      stock: "Stock",
+      threshold: "Threshold",
+      price: "Price",
+      status: "Status",
+    },
+    status: {
+      inStock: "In stock",
+      lowStock: "Low stock",
+      outOfStock: "Out of stock",
+    },
+    detail: {
+      unitsLeft: "{count} units left",
+      outOfStock: "Out of stock",
+    },
+    footer: "Demo preview · App generated by Faya-Studio",
+  },
+  notFound: {
+    code: "Error 404",
+    title: "This page doesn't exist",
+    description:
+      "The link may be outdated, or the page is still being built.",
+    backHome: "Back to home",
+  },
+  meta: {
+    title: "Faya-Studio — Create. Develop. Innovate.",
+    description:
+      "Describe your idea, and our AI agent builds a complete application for you.",
+    create: "Create an app",
+    login: "Sign in",
+    register: "Create an account",
+    projects: "My projects",
+    applications: "Applications",
+    templates: "App templates",
+    credits: "AI credits",
+    settings: "Settings",
+    help: "Help & support",
+  },
+  toasts: {
+    proOffer: "The Pro plan will be available soon.",
+    proOfferDescription: "This prototype only showcases the interface.",
+    organizationSelected: 'Organization "{name}" selected.',
+    organizationComingSoon:
+      "Creating an organization will be available soon.",
+    rechargeComingSoon: "Buying credits will be available soon.",
+    allRead: "All notifications marked as read.",
+    signOutComingSoon:
+      "Signing out will be available in the full version.",
+    projectRename: 'Renaming "{name}" will be available soon.',
+    projectDuplicate: "Duplicating a project will be available soon.",
+    projectDelete: "Deletion will be available in the full version.",
+    voiceComingSoon:
+      "Voice input will be available in the full version.",
+    actionFailed: "Action failed. Please try again.",
+  },
+};

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <rect width="40" height="40" rx="9" fill="#090e12"/>
+  <path d="M9 9.5C9 7.567 10.567 6 12.5 6H31.5L26.5 13H16V18.5H27L22.5 25H16V33.5L9 36V9.5Z" fill="url(#fayaIconGradient)"/>
+  <path d="M16 18.5H27L22.5 25H16V18.5Z" fill="#0d9f54"/>
+  <defs>
+    <linearGradient id="fayaIconGradient" x1="9" y1="6" x2="31" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22f384"/>
+      <stop offset="1" stop-color="#10b965"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,36 +1,222 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Faya-Studio — Plateforme full-stack
 
-## Getting Started
+Application **Faya-Studio**, construite à partir de la maquette
+(`../maquette.html`), du document de conception (`../Projet.txt`) et des notes
+techniques (`../Technique.txt`).
 
-First, run the development server:
+La plateforme est bilingue français/anglais, dispose d'une authentification
+réelle, génère des applications métiers avec Pi/DeepSeek et stocke les
+utilisateurs, organisations, projets, crédits et builds dans une base SQLite via
+Prisma. Les applications générées peuvent être exportées en exécutable Windows
+Tauri 2 avec une base SQLite locale.
+
+## Démarrage
 
 ```bash
+npm install
+npm run prisma:generate
+npm run db:migrate
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Créer un fichier `.env` à partir de `.env.example` :
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL="file:./dev.db"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+**Compte de démonstration :**
 
-To learn more about Next.js, take a look at the following resources:
+```text
+demo@faya-studio.app / demo1234
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Authentification et espace de travail
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Inscription, connexion et déconnexion par e-mail + mot de passe.
+- Mots de passe hachés avec bcrypt, sessions opaques stockées en base et
+  cookie HTTP-only (`faya_session`).
+- Les pages de l'application sont protégées : un visiteur non connecté est
+  redirigé vers `/login`.
+- Chaque utilisateur possède une organisation et un solde de crédits.
+- L'inscription crée automatiquement un espace personnel et 250 crédits.
+- La langue choisie est enregistrée sur le compte (`User.locale`) et
+  restaurée à la connexion.
+- Le changement d'organisation active est prêt dans la barre supérieure
+  (cookie `faya_org`), même si les comptes de démonstration n'ont qu'une
+  organisation.
 
-## Deploy on Vercel
+## Routes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Route | Contenu |
+| --- | --- |
+| `/login` | Connexion |
+| `/register` | Création de compte |
+| `/` | Tableau de bord (projets réels de l'organisation) |
+| `/creer` | Éditeur de création et aperçu |
+| `/projets` | Liste réelle des projets, recherche, création, renommage, duplication, suppression |
+| `/applications` | Liste réelle des applications |
+| `/applications/[id]` | Fiche application (statut, description, dates, sections à venir) |
+| `/credits` | Solde réel, consommation du mois et historique des transactions |
+| `/parametres` | Profil, organisation, membres et langue |
+| `/modeles` | Page d'attente « Modèles d'applications » |
+| `/aide` | Page d'attente « Aide & support » |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+L'éditeur accepte `?project=<id>` pour ouvrir un projet existant, ou
+`?prompt=<demande>&name=<nom>` pour un aperçu non persisté.
+
+## Base de données
+
+SQLite + Prisma (`prisma/schema.prisma`). Le modèle couvre :
+
+- `User`, `Organization`, `Membership` ;
+- `Session` (sessions de connexion) ;
+- `Project` (nom, prompt, icône, statut, organisation, dernière activité) ;
+- `GenerationJob` (statut des générations Pi/DeepSeek) ;
+- `BuildJob` (statut des exports Tauri, artefacts et durées de build) ;
+- `CreditTransaction` (historique des crédits).
+
+Commandes utiles :
+
+```bash
+npm run db:migrate      # appliquer le schéma
+npm run db:seed         # compte et projets de démonstration
+npm run db:studio       # explorer la base
+npm run prisma:generate # régénérer le client Prisma
+```
+
+SQLite est utilisé pour le développement local. La cible de production reste
+PostgreSQL ; le schéma et la couche d'accès sont isolés pour préparer la
+migration.
+
+## Moteur IA (développement)
+
+Le cœur de génération repose sur **Pi** (`@earendil-works/pi-coding-agent`) et
+**DeepSeek** (`deepseek-flash`).
+
+Prérequis : ajouter `DEEPSEEK_API_KEY` dans `.env.local` (fichier ignoré par
+git). `DEEPSEEK_MODEL` permet de choisir le modèle.
+
+```bash
+npm run engine:selftest   # vérifie le workspace confiné et le validateur
+npm run engine:demo       # génère une application de démonstration
+npm run engine:demo -- --prompt "Crée une application de ..."
+```
+
+Le moteur :
+
+- crée un workspace isolé dans `workspaces/<id>` (ignoré par git) ;
+- n'expose à l'agent que des outils de fichiers confinés, sans shell ;
+- valide la structure HTML, les assets locaux et la syntaxe JavaScript ;
+- écrit `index.html`, `styles.css`, `app.js` et peut être prévisualisé via
+  `/api/workspaces/<id>/index.html`.
+
+Le premier test réel a généré **GestiClient**, une application de gestion de
+clients avec ajout, recherche, suppression et persistance locale.
+
+## Génération dans l'éditeur
+
+Chaque projet créé depuis l'interface déclenche une génération réelle :
+
+- `startProjectAction` crée le projet, un `GenerationJob` et lance un worker
+  Node détaché (`scripts/generation-worker.ts`).
+- Le worker exécute Pi/DeepSeek, écrit les événements dans
+  `workspaces/<projectId>/.faya/events.jsonl`, les logs dans
+  `workspaces/.logs/<jobId>.log` et le résultat dans `result.json`.
+- L'éditeur `/creer?project=<id>` interroge
+  `/api/projects/<id>/generation?after=<curseur>` et affiche la conversation
+  réelle, les outils utilisés, la progression et le résumé.
+- Une fois prêt, l'application générée est chargée dans une iframe via
+  `/api/workspaces/<projectId>/index.html`.
+- Les projets existants sans aperçu (données de démonstration) proposent un
+  bouton « Générer l'application ».
+
+Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
+tâches dédiée sera nécessaire en production. La génération produit une
+application web statique ; les applications exportées embarquent le runtime
+SQLite mais utilisent encore `localStorage` pour leurs données (profil de
+génération « desktop » à venir).
+
+## Export desktop (Tauri 2 + SQLite)
+
+Le bouton **Exporter** de l'éditeur compile l'application générée dans le
+template fixe `templates/tauri-v2-sqlite` :
+
+- `exportProjectAction` crée un `BuildJob` et lance
+  `scripts/build-worker.ts` ;
+- le worker copie le template et le frontend généré, puis appelle le
+  `BuildRunner` (`src/engine/build`) ;
+- l'EXE est copié dans `workspaces/.artifacts/<jobId>/`, vérifié par
+  `--self-test`, puis proposé au téléchargement via
+  `/api/builds/<id>/download` ;
+- l'interface suit le build en direct et permet de le relancer.
+
+```bash
+npm run tauri:proof   # copie le template, compile et exécute le self-test SQLite
+```
+
+Le runner local sert au développement. En production, `FAYA_BUILD_RUNNER` et la
+file de build doivent pointer vers des workers Windows isolés, comme décrit
+dans [`docs/tauri-builds.md`](docs/tauri-builds.md).
+
+## Interactions du prototype
+
+- Les suggestions remplissent le prompt ; « + Plus d'exemples » en révèle
+  d'autres.
+- « Créer mon app » crée un projet en base et lance la génération réelle.
+- Les modèles créent eux aussi un projet réel, avec un nom et une icône
+  déduits du modèle.
+- Sans projet en base (aperçu direct), l'éditeur utilise une simulation :
+  8 étapes, messages progressifs, puis aperçu **StockFlow**.
+- Ouvrir un projet existant affiche sa génération réelle, sa progression et son
+  aperçu prêt.
+- Bascule desktop/mobile, onglets Conversation/Aperçu sur mobile, menu
+  latéral en tiroir.
+- Menus organisations, crédits, notifications, profil ; déconnexion réelle.
+- Interface bilingue FR/EN, préférence persistée par cookie et par compte.
+- Gestion réelle des projets : création, recherche, renommage, duplication et
+  suppression avec confirmation.
+- Applications : liste et fiche détaillée avec statut et dates.
+- Crédits : solde, consommation du mois et historique des transactions.
+- Paramètres : modification du profil, du nom de l'organisation, liste des
+  membres, langue et session.
+
+## Stack
+
+- Next.js 16 (App Router, Turbopack)
+- React 19 + TypeScript
+- Tailwind CSS 4
+- shadcn/ui (Base UI) + lucide-react
+- Prisma 6 + SQLite
+- bcryptjs + zod
+- Pi Coding Agent SDK + DeepSeek (`deepseek-flash`)
+- TypeBox pour les outils du moteur
+- Tauri 2 + Rust + `rusqlite` pour l'export desktop
+- Inter via `next/font`, sonner pour les notifications
+- Dictionnaires FR/EN : `src/i18n/dictionaries/fr.ts` et `en.ts`
+- Données de démonstration : `src/lib/mock-data.ts`
+- Simulation : `src/components/editor/creation-studio.tsx`
+
+## Scripts
+
+```bash
+npm run dev              # serveur de développement
+npm run build            # build de production
+npm run start            # serveur de production
+npm run lint             # ESLint
+npx tsc --noEmit         # vérification TypeScript
+npm run engine:selftest  # auto-test du moteur de génération
+npm run tauri:proof      # preuve de build Tauri + SQLite
+```
+
+## Périmètre
+
+La plateforme couvre l'authentification, les sessions, les organisations, les
+projets, les applications, les crédits, les paramètres, la génération réelle par
+IA et l'export desktop Windows. Restent à brancher : consommation de crédits,
+paiements, e-mails transactionnels, synchronisation cloud, export APK, profil de
+génération SQLite pour les apps exportées et marketplace réelle. Les pages
+`/modeles` et `/aide` restent des pages d'attente.

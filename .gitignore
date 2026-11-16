@@ -17,6 +17,13 @@
 /.next/
 /out/
 
+# local database
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# generated application workspaces
+/workspaces/
+
 # production
 /build
 
@@ -32,6 +39,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel

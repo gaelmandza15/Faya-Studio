@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated application workspaces are user/model output, not platform code.
+    "workspaces/**",
+    // Rust/Cargo build outputs and generated Tauri assets.
+    "templates/**/src-tauri/target/**",
+    "templates/**/src-tauri/gen/**",
   ]),
 ]);
 

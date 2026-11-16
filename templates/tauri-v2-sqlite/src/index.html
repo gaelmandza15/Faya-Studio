@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carnet de contacts</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js" defer></script>
+  </head>
+  <body>
+    <div id="warning" class="warning hidden">
+      Cette application utilise SQLite via Tauri. Lancez la version bureau
+      pour accéder aux contacts.
+    </div>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">C</span>
+          <div>
+            <strong>Carnet</strong>
+            <span>Contacts</span>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <span class="nav-item active">
+            <span class="nav-icon">●</span>
+            Contacts
+          </span>
+          <span class="nav-item muted">
+            <span class="nav-icon">○</span>
+            Groupes
+          </span>
+          <span class="nav-item muted">
+            <span class="nav-icon">○</span>
+            Favoris
+          </span>
+        </nav>
+
+        <div class="storage-card">
+          <p class="storage-label">Stockage local</p>
+          <div class="storage-value">
+            <span>SQLite</span>
+            <span id="db-status" class="status-dot">connecté</span>
+          </div>
+          <p class="storage-note">Vos données restent sur cet appareil.</p>
+        </div>
+
+        <div class="user-card">
+          <span class="avatar">JD</span>
+          <div>
+            <strong>Jean Dupont</strong>
+            <span>Administrateur</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Carnet de contacts</p>
+            <h1>Vos contacts</h1>
+            <p class="subtitle">
+              Gérez votre répertoire, recherchez et mettez à jour vos
+              contacts.
+            </p>
+          </div>
+          <div class="stat-card">
+            <span id="contact-count">0</span>
+            <span>contacts</span>
+          </div>
+        </header>
+
+        <div id="error" class="error hidden" role="alert"></div>
+
+        <section class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+            <input
+              id="search"
+              type="search"
+              placeholder="Rechercher un nom, un e-mail ou un téléphone..."
+              aria-label="Rechercher un contact"
+            />
+          </div>
+          <button id="open-form" type="button" class="primary">
+            <span aria-hidden="true">+</span>
+            Nouveau contact
+          </button>
+        </section>
+
+        <section id="form-panel" class="form-panel hidden">
+          <div class="form-header">
+            <div>
+              <p class="eyebrow">Nouvel enregistrement</p>
+              <h2>Ajouter un contact</h2>
+            </div>
+            <button id="close-form" type="button" class="icon-button" aria-label="Fermer">
+              ×
+            </button>
+          </div>
+
+          <form id="contact-form" class="contact-form">
+            <label>
+              Nom complet
+              <input id="name" name="name" autocomplete="name" required />
+            </label>
+            <label>
+              E-mail
+              <input id="email" name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Téléphone
+              <input id="phone" name="phone" type="tel" autocomplete="tel" />
+            </label>
+            <div class="form-actions">
+              <button id="cancel-form" type="button" class="secondary">
+                Annuler
+              </button>
+              <button type="submit" class="primary">
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="table-card">
+          <div class="table-header">
+            <div>
+              <h2>Répertoire</h2>
+              <p id="filter-count">0 contact</p>
+            </div>
+            <span class="badge">SQLite local</span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Contact</th>
+                  <th>E-mail</th>
+                  <th>Téléphone</th>
+                  <th>Ajouté le</th>
+                  <th class="actions-column">Action</th>
+                </tr>
+              </thead>
+              <tbody id="contacts-body"></tbody>
+            </table>
+          </div>
+
+          <div id="empty" class="empty hidden">
+            <span class="empty-icon">◎</span>
+            <h3>Aucun contact</h3>
+            <p>Ajoutez votre premier contact pour commencer.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
