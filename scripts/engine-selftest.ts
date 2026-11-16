@@ -26,6 +26,85 @@ const VALID_CSS = `body { font-family: system-ui, sans-serif; }`;
 
 const VALID_JS = `document.querySelector("#title").textContent = "OK";`;
 
+const DESKTOP_SCHEMA = `PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
+INSERT OR IGNORE INTO tasks (id, title, done) VALUES (1, 'Test', 0);`;
+
+const DESKTOP_DB = `(function () {
+  const invoke = window.__TAURI__?.core?.invoke;
+  const DESKTOP = typeof invoke === "function";
+  const KEY = "faya:tasks";
+  const SEED = [{ id: 1, title: "Test", done: 0 }];
+
+  function localRows() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return JSON.parse(raw);
+      localStorage.setItem(KEY, JSON.stringify(SEED));
+    } catch {
+      // Fall back to memory when storage is unavailable.
+    }
+    return SEED.slice();
+  }
+
+  async function listTasks() {
+    if (DESKTOP) {
+      return invoke("db_select", {
+        query: "SELECT id, title, done FROM tasks ORDER BY id",
+        params: [],
+      });
+    }
+    return localRows();
+  }
+
+  async function createTask(task) {
+    if (DESKTOP) {
+      return invoke("db_execute", {
+        query: "INSERT INTO tasks (title, done) VALUES (?1, ?2)",
+        params: [task.title, task.done ? 1 : 0],
+      });
+    }
+    const rows = localRows();
+    rows.push({ id: Date.now(), title: task.title, done: 0 });
+    localStorage.setItem(KEY, JSON.stringify(rows));
+    return 1;
+  }
+
+  window.FayaDB = { listTasks, createTask };
+})();`;
+
+const DESKTOP_APP = `async function render() {
+  const tasks = await window.FayaDB.listTasks();
+  document.querySelector("#count").textContent = String(tasks.length);
+}
+document.querySelector("#add").addEventListener("click", async () => {
+  await window.FayaDB.createTask({ title: "Nouvelle tâche", done: false });
+  await render();
+});
+render();`;
+
+const DESKTOP_HTML = `<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Test desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1 id="count">0</h1>
+    <button id="add" type="button">Ajouter</button>
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>`;
+
 async function main() {
   const workspace = await createWorkspace();
   let failures = 0;
@@ -49,6 +128,73 @@ async function main() {
     const valid = await validateWorkspace(workspace.dir);
     check("une application valide passe les contrôles", valid.ok);
     if (!valid.ok) console.log(valid.report);
+
+    await writeWorkspaceFile(workspace.dir, "index.html", DESKTOP_HTML);
+    await writeWorkspaceFile(workspace.dir, "app.js", DESKTOP_APP);
+    await writeWorkspaceFile(workspace.dir, "db.js", DESKTOP_DB);
+    await writeWorkspaceFile(
+      workspace.dir,
+      "desktop-schema.sql",
+      DESKTOP_SCHEMA,
+    );
+
+    const desktop = await validateWorkspace(workspace.dir, {
+      target: "desktop",
+    });
+    check(
+      "une application desktop valide passe les contrôles SQLite",
+      desktop.ok,
+    );
+    if (!desktop.ok) console.log(desktop.report);
+
+    await writeWorkspaceFile(
+      workspace.dir,
+      "desktop-schema.sql",
+      "CREATE TABLE broken (",
+    );
+    const brokenSchema = await validateWorkspace(workspace.dir, {
+      target: "desktop",
+    });
+    check(
+      "un schéma SQLite invalide est détecté",
+      !brokenSchema.ok &&
+        brokenSchema.report.includes("failed to apply"),
+    );
+    await writeWorkspaceFile(
+      workspace.dir,
+      "desktop-schema.sql",
+      DESKTOP_SCHEMA,
+    );
+
+    await writeWorkspaceFile(
+      workspace.dir,
+      "db.js",
+      DESKTOP_DB.replace("FROM tasks", "FROM missing_table"),
+    );
+    const missingTable = await validateWorkspace(workspace.dir, {
+      target: "desktop",
+    });
+    check(
+      "une table absente du schéma est détectée",
+      !missingTable.ok &&
+        missingTable.report.includes("does not create: missing_table"),
+    );
+    await writeWorkspaceFile(workspace.dir, "db.js", DESKTOP_DB);
+
+    await writeWorkspaceFile(
+      workspace.dir,
+      "app.js",
+      `${DESKTOP_APP}\nlocalStorage.getItem("x");`,
+    );
+    const directStorage = await validateWorkspace(workspace.dir, {
+      target: "desktop",
+    });
+    check(
+      "un accès direct au localStorage dans app.js est refusé",
+      !directStorage.ok &&
+        directStorage.report.includes("must not use localStorage"),
+    );
+    await writeWorkspaceFile(workspace.dir, "app.js", DESKTOP_APP);
 
     let escaped = false;
     try {

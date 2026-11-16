@@ -2,6 +2,8 @@ export type ProjectIcon = "cube" | "calendar" | "chart" | "users";
 
 export type ProjectStatus = "generating" | "ready" | "error";
 
+export type GenerationTarget = "web" | "desktop";
+
 export interface Project {
   id: string;
   name: string;

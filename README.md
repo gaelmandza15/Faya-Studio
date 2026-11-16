@@ -135,10 +135,30 @@ Chaque projet créé depuis l'interface déclenche une génération réelle :
   bouton « Générer l'application ».
 
 Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
-tâches dédiée sera nécessaire en production. La génération produit une
-application web statique ; les applications exportées embarquent le runtime
-SQLite mais utilisent encore `localStorage` pour leurs données (profil de
-génération « desktop » à venir).
+tâches dédiée sera nécessaire en production. La synchronisation cloud et le
+multi-utilisateur dans les apps desktop restent à concevoir.
+
+## Profil de génération desktop
+
+Chaque projet porte une cible (`Project.target`, `desktop` par défaut). Pour la
+cible desktop, le moteur produit une application réellement adossée à SQLite :
+
+- `desktop-schema.sql` : tables, contraintes, index et données de départ ;
+- `db.js` : couche `window.FayaDB`, avec requêtes paramétrées et appels
+  `db_select` / `db_execute` sous Tauri ;
+- `app.js` : aucune utilisation directe de `localStorage`, tout passe par
+  `FayaDB` ;
+- `index.html` : charge `db.js` avant `app.js`.
+
+En aperçu navigateur, `db.js` bascule automatiquement sur un stockage local avec
+la même API, ce qui permet de tester l'application sans lancer Tauri.
+
+Le validateur du moteur applique le schéma dans une base SQLite en mémoire
+(`node:sqlite`), vérifie que les tables référencées existent, que les requêtes
+sont paramétrées, que `app.js` ne contourne pas `FayaDB` et que les scripts sont
+chargés dans le bon ordre. Le worker de build copie ensuite
+`desktop-schema.sql` dans le template : le shell applique le schéma au démarrage
+et l'EXE est validé par `--self-test`.
 
 ## Export desktop (Tauri 2 + SQLite)
 
@@ -147,8 +167,9 @@ template fixe `templates/tauri-v2-sqlite` :
 
 - `exportProjectAction` crée un `BuildJob` et lance
   `scripts/build-worker.ts` ;
-- le worker copie le template et le frontend généré, puis appelle le
-  `BuildRunner` (`src/engine/build`) ;
+- le worker copie le template et le frontend généré, remplace
+  `src-tauri/migrations/schema.sql` par le `desktop-schema.sql` du projet, puis
+  appelle le `BuildRunner` (`src/engine/build`) ;
 - l'EXE est copié dans `workspaces/.artifacts/<jobId>/`, vérifié par
   `--self-test`, puis proposé au téléchargement via
   `/api/builds/<id>/download` ;

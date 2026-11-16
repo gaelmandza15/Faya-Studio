@@ -31,15 +31,19 @@ async function main() {
   }
 
   const prompt = getArg("--prompt")?.trim() || DEFAULT_PROMPT;
+  const target =
+    getArg("--target") === "web" ? "web" : "desktop";
   const workspace = await createWorkspace();
 
   console.log(`\nWorkspace : ${workspace.dir}`);
+  console.log(`Cible     : ${target}`);
   console.log(`Prompt    : ${prompt}\n`);
   console.log("--- Agent Pi / DeepSeek ---\n");
 
   const result = await generateApp({
     prompt,
     workspaceDir: workspace.dir,
+    target,
     onEvent(event) {
       if (event.type === "text") {
         process.stdout.write(event.text);

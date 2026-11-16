@@ -4,7 +4,7 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { createWriteStream } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
@@ -86,9 +86,11 @@ async function main() {
     });
 
   try {
+    const target = project.target === "web" ? "web" : "desktop";
     const result = await generateApp({
       prompt: project.prompt,
       workspaceDir,
+      target,
       onEvent(event) {
         try {
           eventsStream.write(`${JSON.stringify(sanitize(event))}\n`);
@@ -99,6 +101,13 @@ async function main() {
     });
 
     await writeFile(resultPath, JSON.stringify(result, null, 2), "utf8");
+
+    if (result.ok && target === "desktop") {
+      await copyFile(
+        path.join(workspaceDir, "desktop-schema.sql"),
+        path.join(workspaceDir, ".faya", "desktop-schema.sql"),
+      ).catch(() => undefined);
+    }
 
     if (result.ok) {
       await prisma.project.update({

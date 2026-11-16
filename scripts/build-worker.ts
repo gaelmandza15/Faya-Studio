@@ -139,27 +139,35 @@ async function main() {
         ".build",
         ".git",
         "node_modules",
+        "desktop-schema.sql",
       ]),
     });
 
-    const schemaOverride = path.join(
-      workspaceDir,
-      ".faya",
-      "desktop-schema.sql",
-    );
+    const schemaCandidates = [
+      path.join(workspaceDir, "desktop-schema.sql"),
+      path.join(workspaceDir, ".faya", "desktop-schema.sql"),
+    ];
+    let schemaOverride: string | undefined;
 
-    try {
-      const schema = await readFile(schemaOverride, "utf8");
+    for (const candidate of schemaCandidates) {
+      try {
+        const content = await readFile(candidate, "utf8");
 
-      if (schema.trim()) {
-        await writeFile(
-          path.join(buildDir, "src-tauri", "migrations", "schema.sql"),
-          schema,
-          "utf8",
-        );
+        if (content.trim()) {
+          schemaOverride = content;
+          break;
+        }
+      } catch {
+        // Try the next location.
       }
-    } catch {
-      // No custom schema: keep the template's demo schema.
+    }
+
+    if (schemaOverride) {
+      await writeFile(
+        path.join(buildDir, "src-tauri", "migrations", "schema.sql"),
+        schemaOverride,
+        "utf8",
+      );
     }
 
     const runner = getBuildRunner();

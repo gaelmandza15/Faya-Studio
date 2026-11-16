@@ -15,15 +15,40 @@ The editor's **Export** dialog starts a real desktop build:
 2. `enqueueBuild` creates a `BuildJob` (status `queued`) and spawns
    `scripts/build-worker.ts` as a detached Node process.
 3. The worker copies the Tauri template and the generated frontend into
-   `workspaces/.build-jobs/<jobId>`, optionally overrides
-   `src-tauri/migrations/schema.sql` with
-   `workspaces/<projectId>/.faya/desktop-schema.sql`, then calls `BuildRunner`.
+   `workspaces/.build-jobs/<jobId>`, then overrides
+   `src-tauri/migrations/schema.sql` with the project's
+   `desktop-schema.sql` (root first, then
+   `.faya/desktop-schema.sql`), and calls `BuildRunner`.
 4. The resulting binary is copied to
    `workspaces/.artifacts/<jobId>/<app-name>.exe`, checked with `--self-test`,
    and recorded on the `BuildJob` row.
 5. The dialog polls `/api/projects/[id]/builds`; the download button hits
    `/api/builds/[id]/download`, which re-checks the session and organization
    membership before streaming the file.
+
+## Desktop generation profile
+
+New projects are generated with `target = "desktop"`. The engine produces four
+artifacts:
+
+- `desktop-schema.sql`: tables, constraints, indexes and seed rows;
+- `db.js`: a `window.FayaDB` data layer that calls `db_select` / `db_execute`
+  under Tauri and falls back to namespaced localStorage in the browser preview;
+- `app.js`: no direct storage access, all reads/writes go through `FayaDB`;
+- `index.html`: loads `db.js` before `app.js`.
+
+Before a project can be marked ready, `validateWorkspace` applies the schema
+in an in-memory SQLite database, checks that every table referenced in `db.js`
+exists, requires parameterized SQL, verifies the script order and rejects
+`localStorage` in `app.js`. The Tauri shell itself stays generic: it applies
+whatever schema is embedded at build time.
+
+The shell creates the database before the page loads. The frontend never runs
+`CREATE TABLE` at runtime on desktop; the browser preview uses the
+localStorage fallback instead.
+
+A future `web` target keeps the previous behaviour (static app, localStorage
+only) for apps that are not meant to be exported.
 
 Builds share a warm Cargo cache at
 `workspaces/.build-cache/cargo-target` (override with
