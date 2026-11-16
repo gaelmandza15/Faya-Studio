@@ -163,21 +163,25 @@ Chaque projet porte une cible (`Project.target`, `desktop` par défaut). Pour la
 cible desktop, le moteur produit une application réellement adossée à SQLite :
 
 - `desktop-schema.sql` : tables, contraintes, index et données de départ ;
-- `db.js` : couche `window.FayaDB`, avec requêtes paramétrées et appels
-  `db_select` / `db_execute` sous Tauri ;
-- `app.js` : aucune utilisation directe de `localStorage`, tout passe par
-  `FayaDB` ;
-- `index.html` : charge `db.js` avant `app.js`.
+- une couche de données au choix (par exemple `db.js`), qui appelle
+  `db_select` / `db_execute` sous Tauri et gère un repli local pour l'aperçu
+  navigateur ;
+- `index.html` et les assets nécessaires.
 
-En aperçu navigateur, `db.js` bascule automatiquement sur un stockage local avec
-la même API, ce qui permet de tester l'application sans lancer Tauri.
+La structure des fichiers est libre : le moteur doit seulement respecter le
+contrat du runtime et le résultat attendu. Le prompt décrit le cadre et la
+qualité attendue, sans imposer une méthode d'exécution.
+
+Le cadre est défini une seule fois dans `src/engine/frame.ts`
+(`FRAME_VERSION`) : le prompt et le validateur en dérivent tous les deux, ce
+qui évite les contraintes contradictoires.
 
 Le validateur du moteur applique le schéma dans une base SQLite en mémoire
-(`node:sqlite`), vérifie que les tables référencées existent, que les requêtes
-sont paramétrées, que `app.js` ne contourne pas `FayaDB` et que les scripts sont
-chargés dans le bon ordre. Le worker de build copie ensuite
-`desktop-schema.sql` dans le template : le shell applique le schéma au démarrage
-et l'EXE est validé par `--self-test`.
+(`node:sqlite`), vérifie qu'il reste idempotent, que les tables référencées
+existent et que l'application utilise le bridge Tauri. Il refuse aussi les
+assets externes. Le worker de build copie ensuite `desktop-schema.sql` dans le
+template : le shell applique le schéma au démarrage et l'EXE est validé par
+`--self-test`.
 
 ## Export desktop (Tauri 2 + SQLite)
 

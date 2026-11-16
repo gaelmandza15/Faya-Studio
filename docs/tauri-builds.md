@@ -28,24 +28,27 @@ The editor's **Export** dialog starts a real desktop build:
 
 ## Desktop generation profile
 
-New projects are generated with `target = "desktop"`. The engine produces four
-artifacts:
+New projects are generated with `target = "desktop"`. The platform requires:
 
 - `desktop-schema.sql`: tables, constraints, indexes and seed rows;
-- `db.js`: a `window.FayaDB` data layer that calls `db_select` / `db_execute`
-  under Tauri and falls back to namespaced localStorage in the browser preview;
-- `app.js`: no direct storage access, all reads/writes go through `FayaDB`;
-- `index.html`: loads `db.js` before `app.js`.
+- a data layer of the model's choosing that calls `db_select` / `db_execute`
+  under Tauri and keeps the app usable in the browser preview;
+- `index.html` and the assets needed to run the app.
+
+The file layout and implementation approach are left to the model. The prompt
+defines the runtime frame, the outcome and the quality bar rather than a
+step-by-step method. The frame lives in `src/engine/frame.ts`
+(`FRAME_VERSION`) and drives both the prompt and the validator, so a rule
+cannot exist in only one of them.
 
 Before a project can be marked ready, `validateWorkspace` applies the schema
-in an in-memory SQLite database, checks that every table referenced in `db.js`
-exists, requires parameterized SQL, verifies the script order and rejects
-`localStorage` in `app.js`. The Tauri shell itself stays generic: it applies
+twice in an in-memory SQLite database to prove it is idempotent, checks that
+every referenced table exists, that the app uses the Tauri bridge and that no
+external asset is referenced. The Tauri shell itself stays generic: it applies
 whatever schema is embedded at build time.
 
-The shell creates the database before the page loads. The frontend never runs
-`CREATE TABLE` at runtime on desktop; the browser preview uses the
-localStorage fallback instead.
+The shell creates the database before the page loads. The browser preview uses
+the app's local fallback instead.
 
 A future `web` target keeps the previous behaviour (static app, localStorage
 only) for apps that are not meant to be exported.

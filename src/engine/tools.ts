@@ -13,6 +13,7 @@ import {
   resolveInsideWorkspace,
   writeWorkspaceFile,
 } from "./workspace";
+import { getTargetFrame, type TargetFrame } from "./frame";
 import type { GenerationTarget } from "../lib/types";
 
 const execFileAsync = promisify(execFile);
@@ -83,14 +84,45 @@ function referencedTables(sql: string): Set<string> {
     ).map((match) => match[1].toLowerCase()),
   );
 
+  const reserved = new Set([
+    "set",
+    "where",
+    "select",
+    "values",
+    "excluded",
+    "conflict",
+    "do",
+    "nothing",
+    "returning",
+    "on",
+    "or",
+    "ignore",
+    "replace",
+    "temporary",
+    "temp",
+    "table",
+    "index",
+    "view",
+    "trigger",
+    "if",
+    "not",
+    "exists",
+    "as",
+  ]);
+
   const tables = new Set<string>();
 
   for (const match of sql.matchAll(
-    /\b(?:from|into|update)\s+["'`]?([a-zA-Z_]\w*)/gi,
+    /\b(?:from|into)\s+["'`]?([a-zA-Z_]\w*)|\bupdate\s+(?:or\s+[a-z]+\s+)?["'`]?([a-zA-Z_]\w*)/gi,
   )) {
-    const name = match[1].toLowerCase();
+    const name = (match[1] ?? match[2] ?? "").toLowerCase();
 
-    if (!name.startsWith("sqlite_") && !ctes.has(name)) {
+    if (
+      name &&
+      !name.startsWith("sqlite_") &&
+      !reserved.has(name) &&
+      !ctes.has(name)
+    ) {
       tables.add(name);
     }
   }
@@ -98,45 +130,24 @@ function referencedTables(sql: string): Set<string> {
   return tables;
 }
 
-function scriptSources(html: string): string[] {
-  return Array.from(
-    html.matchAll(/<script[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi),
-  ).map((match) => match[1].split("?")[0]);
-}
-
 async function validateDesktop(
   root: string,
   html: string,
+  frame: TargetFrame,
   errors: string[],
   notes: string[],
 ): Promise<void> {
-  const schema = await readFile(
-    path.join(root, "desktop-schema.sql"),
-    "utf8",
-  ).catch(() => null);
-  const dbSource = await readFile(
-    path.join(root, "db.js"),
-    "utf8",
-  ).catch(() => null);
-  const appSource = await readFile(
-    path.join(root, "app.js"),
-    "utf8",
-  ).catch(() => null);
+  const schema = frame.checks.requiresDesktopSchema
+    ? await readFile(
+        path.join(root, "desktop-schema.sql"),
+        "utf8",
+      ).catch(() => null)
+    : null;
 
-  if (!schema) {
+  if (frame.checks.requiresDesktopSchema && !schema) {
     errors.push(
       "desktop-schema.sql is missing. The desktop target requires a SQLite schema at the workspace root.",
     );
-  }
-
-  if (!dbSource) {
-    errors.push(
-      "db.js is missing. The desktop target requires a FayaDB data layer at the workspace root.",
-    );
-  }
-
-  if (!appSource) {
-    errors.push("app.js is missing.");
   }
 
   if (schema) {
@@ -165,6 +176,17 @@ async function validateDesktop(
         database = new sqlite.DatabaseSync(":memory:");
         database.exec(schema);
         notes.push("SQLite schema applied successfully.");
+
+        if (frame.checks.schemaMustStayIdempotent) {
+          try {
+            database.exec(schema);
+            notes.push("SQLite schema is idempotent.");
+          } catch (error) {
+            errors.push(
+              `desktop-schema.sql is not idempotent:\n${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
       } catch (error) {
         errors.push(
           `desktop-schema.sql failed to apply:\n${error instanceof Error ? error.message : String(error)}`,
@@ -175,63 +197,46 @@ async function validateDesktop(
     }
   }
 
-  if (dbSource) {
-    if (!/db_select/.test(dbSource) || !/db_execute/.test(dbSource)) {
-      errors.push(
-        "db.js must call the Tauri commands db_select and db_execute.",
-      );
-    }
+  const files = await listWorkspaceFiles(root, 6);
+  let source = "";
 
-    if (!/window\.FayaDB\s*=/.test(dbSource)) {
-      errors.push("db.js must expose its API on window.FayaDB.");
-    }
+  for (const file of files) {
+    if (!/\.(js|mjs)$/i.test(file.path)) continue;
 
-    const statements = sqlStrings(dbSource);
+    const content = await readFile(
+      path.join(root, file.path),
+      "utf8",
+    ).catch(() => "");
 
-    if (!/\?(\d+)?/.test(statements)) {
-      errors.push(
-        "db.js must use parameterized SQL placeholders (?1, ?2, ...) instead of concatenating values.",
-      );
-    }
-
-    if (schema) {
-      const tables = createdTables(schema);
-      const missing = Array.from(referencedTables(statements)).filter(
-        (table) => !tables.has(table),
-      );
-
-      if (missing.length > 0) {
-        errors.push(
-          `db.js references tables that desktop-schema.sql does not create: ${missing.join(", ")}.`,
-        );
-      }
-    }
+    source += `${content}\n`;
   }
 
-  if (appSource) {
-    if (/localStorage/.test(appSource)) {
-      errors.push(
-        "app.js must not use localStorage directly. All persistence goes through window.FayaDB in db.js.",
-      );
-    }
-
-    if (!/FayaDB\s*\./.test(appSource)) {
-      errors.push(
-        "app.js must read and write data through window.FayaDB.",
-      );
-    }
+  for (const match of html.matchAll(
+    /<script(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi,
+  )) {
+    source += `${match[1]}\n`;
   }
 
-  const scripts = scriptSources(html);
-  const dbIndex = scripts.findIndex((source) => source.endsWith("db.js"));
-  const appIndex = scripts.findIndex((source) => source.endsWith("app.js"));
-
-  if (dbIndex === -1) {
-    errors.push("index.html must load db.js.");
+  if (
+    frame.checks.requiresTauriBridge &&
+    (!/\bdb_select\b/.test(source) || !/\bdb_execute\b/.test(source))
+  ) {
+    errors.push(
+      'The desktop app must use the shell bridge: invoke("db_select", ...) to read and invoke("db_execute", ...) to write.',
+    );
   }
 
-  if (dbIndex !== -1 && appIndex !== -1 && dbIndex > appIndex) {
-    errors.push("index.html must load db.js before app.js.");
+  if (schema) {
+    const tables = createdTables(schema);
+    const missing = Array.from(
+      referencedTables(sqlStrings(source)),
+    ).filter((table) => !tables.has(table));
+
+    if (missing.length > 0) {
+      errors.push(
+        `The application references tables that desktop-schema.sql does not create: ${missing.join(", ")}.`,
+      );
+    }
   }
 }
 
@@ -245,6 +250,7 @@ export async function validateWorkspace(
 ): Promise<WorkspaceCheck> {
   const errors: string[] = [];
   const notes: string[] = [];
+  const frame = getTargetFrame(options.target ?? "web");
   let html: string;
 
   try {
@@ -273,6 +279,18 @@ export async function validateWorkspace(
   const references = Array.from(
     html.matchAll(/(?:src|href)\s*=\s*["']([^"']+)["']/gi),
   ).map((match) => match[1]);
+
+  if (frame.checks.forbidsExternalAssets) {
+    for (const match of html.matchAll(
+      /<(script|link|img|source|video|audio|iframe)\b[^>]*\b(?:src|href)\s*=\s*["']([^"']+)["']/gi,
+    )) {
+      if (/^(https?:)?\/\//i.test(match[2])) {
+        errors.push(
+          `External asset is not allowed: <${match[1].toLowerCase()}> ${match[2]}`,
+        );
+      }
+    }
+  }
 
   for (const reference of references) {
     if (
@@ -323,8 +341,11 @@ export async function validateWorkspace(
     }
   }
 
-  if ((options.target ?? "web") === "desktop") {
-    await validateDesktop(root, html, errors, notes);
+  if (
+    frame.checks.requiresDesktopSchema ||
+    frame.checks.requiresTauriBridge
+  ) {
+    await validateDesktop(root, html, frame, errors, notes);
   }
 
   const fileList =
@@ -354,7 +375,7 @@ export function createWorkspaceTools(
     description:
       "List the files currently present in the workspace, with their sizes.",
     promptSnippet:
-      "List the current workspace files before writing or editing.",
+      "Inspect the workspace when it helps you plan the implementation.",
     parameters: Type.Object({
       path: Type.Optional(
         Type.String({
@@ -398,7 +419,7 @@ export function createWorkspaceTools(
     description:
       "Read a UTF-8 text file from the workspace. Paths must stay inside the workspace.",
     promptSnippet:
-      "Read an existing workspace file before modifying it.",
+      "Read existing files before changing them.",
     parameters: Type.Object({
       path: Type.String({
         description: "Relative path of the file to read.",
@@ -417,14 +438,9 @@ export function createWorkspaceTools(
     name: "write_file",
     label: "Write a workspace file",
     description:
-      "Create or overwrite a UTF-8 text file in the workspace. Use this for index.html, styles.css, app.js and, for desktop apps, db.js and desktop-schema.sql.",
+      "Create or overwrite a UTF-8 text file in the workspace.",
     promptSnippet:
-      "Write or overwrite files in the workspace with complete file contents.",
-    promptGuidelines: [
-      "Use write_file for every file creation or modification.",
-      "Use write_file only with relative paths inside the workspace.",
-      "Write complete files; do not rely on a shell or package manager.",
-    ],
+      "Create and edit the application files with write_file.",
     parameters: Type.Object({
       path: Type.String({
         description: "Relative path of the file to write.",
@@ -461,14 +477,10 @@ export function createWorkspaceTools(
     label: "Validate the generated app",
     description:
       options.target === "desktop"
-        ? "Validate index.html, local assets, JavaScript syntax, the SQLite schema, the FayaDB layer and the desktop script order. Returns CHECK PASSED or CHECK FAILED with actionable errors."
-        : "Validate index.html, local asset references and JavaScript syntax. Returns CHECK PASSED or CHECK FAILED with actionable errors.",
+        ? "Validate the application: HTML structure, local assets, JavaScript syntax, the SQLite schema and the desktop bridge. Returns actionable errors when something is wrong."
+        : "Validate the application: HTML structure, local assets and JavaScript syntax. Returns actionable errors when something is wrong.",
     promptSnippet:
-      "Validate the generated app after writing files and fix any reported errors.",
-    promptGuidelines: [
-      "Use run_checks after writing files and after every fix.",
-      "Do not call finish while run_checks reports CHECK FAILED.",
-    ],
+      "Validate the app and fix any reported issue.",
     parameters: Type.Object({}),
     async execute() {
       const check = await validateWorkspace(root, options);
@@ -485,12 +497,9 @@ export function createWorkspaceTools(
     name: "finish",
     label: "Finish generation",
     description:
-      "Call this only when the application is complete and run_checks passes. Provide a short summary of what was built.",
+      "Call this once the application is complete and verified. Provide a short summary of what was built or changed.",
     promptSnippet:
-      "Finish the generation with a short summary once checks pass.",
-    promptGuidelines: [
-      "Call finish only after run_checks reports CHECK PASSED.",
-    ],
+      "Finish with a concise summary when the app is ready.",
     parameters: Type.Object({
       summary: Type.String({
         description:

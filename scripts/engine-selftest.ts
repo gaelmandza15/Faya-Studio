@@ -76,7 +76,19 @@ const DESKTOP_DB = `(function () {
     return 1;
   }
 
-  window.FayaDB = { listTasks, createTask };
+  async function upsertTask(task) {
+    if (DESKTOP) {
+      return invoke("db_execute", {
+        query:
+          "INSERT INTO tasks (id, title) VALUES (?1, ?2) " +
+          "ON CONFLICT(id) DO UPDATE SET title = excluded.title",
+        params: [task.id, task.title],
+      });
+    }
+    return 1;
+  }
+
+  window.FayaDB = { listTasks, createTask, upsertTask };
 })();`;
 
 const DESKTOP_APP = `async function render() {
@@ -168,6 +180,25 @@ async function main() {
 
     await writeWorkspaceFile(
       workspace.dir,
+      "desktop-schema.sql",
+      "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
+    );
+    const notIdempotent = await validateWorkspace(workspace.dir, {
+      target: "desktop",
+    });
+    check(
+      "un schéma non idempotent est détecté",
+      !notIdempotent.ok &&
+        notIdempotent.report.includes("not idempotent"),
+    );
+    await writeWorkspaceFile(
+      workspace.dir,
+      "desktop-schema.sql",
+      DESKTOP_SCHEMA,
+    );
+
+    await writeWorkspaceFile(
+      workspace.dir,
       "db.js",
       DESKTOP_DB.replace("FROM tasks", "FROM missing_table"),
     );
@@ -183,18 +214,18 @@ async function main() {
 
     await writeWorkspaceFile(
       workspace.dir,
-      "app.js",
-      `${DESKTOP_APP}\nlocalStorage.getItem("x");`,
+      "db.js",
+      "window.FayaDB = { listTasks: async () => [] };",
     );
-    const directStorage = await validateWorkspace(workspace.dir, {
+    const missingBridge = await validateWorkspace(workspace.dir, {
       target: "desktop",
     });
     check(
-      "un accès direct au localStorage dans app.js est refusé",
-      !directStorage.ok &&
-        directStorage.report.includes("must not use localStorage"),
+      "une application desktop sans bridge Tauri est refusée",
+      !missingBridge.ok &&
+        missingBridge.report.includes("shell bridge"),
     );
-    await writeWorkspaceFile(workspace.dir, "app.js", DESKTOP_APP);
+    await writeWorkspaceFile(workspace.dir, "db.js", DESKTOP_DB);
 
     let escaped = false;
     try {
@@ -230,6 +261,18 @@ async function main() {
       "un asset local manquant est détecté",
       !missingAsset.ok &&
         missingAsset.report.includes("Missing local asset"),
+    );
+
+    await writeFile(
+      path.join(workspace.dir, "index.html"),
+      '<!DOCTYPE html><html><head><title>CDN</title><script src="https://cdn.example.com/lib.js"></script></head><body></body></html>',
+      "utf8",
+    );
+    const externalAsset = await validateWorkspace(workspace.dir);
+    check(
+      "un asset externe est refusé",
+      !externalAsset.ok &&
+        externalAsset.report.includes("External asset is not allowed"),
     );
 
     console.log(
