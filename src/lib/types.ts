@@ -4,6 +4,14 @@ export type ProjectStatus = "generating" | "ready" | "error";
 
 export type GenerationTarget = "web" | "desktop";
 
+export interface ProjectMessageView {
+  id: string;
+  role: string;
+  content: string;
+  jobId: string | null;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;

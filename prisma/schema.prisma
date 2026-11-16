@@ -75,6 +75,7 @@ model Project {
   createdBy      User?           @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
   jobs           GenerationJob[]
   builds         BuildJob[]
+  messages       ProjectMessage[]
 
   @@index([organizationId, lastActivityAt])
 }
@@ -97,12 +98,26 @@ model BuildJob {
 }
 
 model GenerationJob {
+  id          String   @id @default(cuid())
+  projectId   String
+  status      String   @default("queued")
+  kind        String   @default("generate")
+  instruction String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectMessage {
   id        String   @id @default(cuid())
   projectId String
-  status    String   @default("queued")
-  error     String?
+  jobId     String?
+  role      String
+  content   String
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])

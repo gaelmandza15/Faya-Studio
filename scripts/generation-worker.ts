@@ -4,7 +4,7 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { createWriteStream } from "node:fs";
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
@@ -42,6 +42,15 @@ function sanitize(event: EngineEvent): EngineEvent {
   return event;
 }
 
+async function isFile(pathname: string): Promise<boolean> {
+  try {
+    const info = await stat(pathname);
+    return info.isFile();
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const projectId = getArg("--project");
   const jobId = getArg("--job");
@@ -58,6 +67,16 @@ async function main() {
     throw new Error(`Project not found: ${projectId}`);
   }
 
+  const job = await prisma.generationJob.findUnique({
+    where: { id: jobId },
+  });
+
+  if (!job || job.projectId !== projectId) {
+    throw new Error(`Generation job not found: ${jobId}`);
+  }
+
+  const mode = job.kind === "modify" ? "modify" : "generate";
+
   await prisma.generationJob.update({
     where: { id: jobId },
     data: { status: "running", error: null },
@@ -69,11 +88,40 @@ async function main() {
   });
 
   const workspaceDir = path.join(getWorkspacesRoot(), projectId);
-  await rm(workspaceDir, { recursive: true, force: true });
-  await mkdir(path.join(workspaceDir, ".faya"), { recursive: true });
 
-  const eventsPath = path.join(workspaceDir, ".faya", "events.jsonl");
-  const resultPath = path.join(workspaceDir, ".faya", "result.json");
+  if (mode === "generate") {
+    await rm(workspaceDir, { recursive: true, force: true });
+  } else if (!(await isFile(path.join(workspaceDir, "index.html")))) {
+    throw new Error(
+      "The application has no generated files to modify. Generate it first.",
+    );
+  }
+
+  if (mode === "generate") {
+    const messageCount = await prisma.projectMessage.count({
+      where: { projectId },
+    });
+
+    if (messageCount === 0) {
+      await prisma.projectMessage
+        .create({
+          data: {
+            projectId,
+            role: "user",
+            content: project.prompt,
+          },
+        })
+        .catch(() => undefined);
+    }
+  }
+
+  const jobsDir = path.join(workspaceDir, ".faya", "jobs");
+  const resultsDir = path.join(workspaceDir, ".faya", "results");
+  await mkdir(jobsDir, { recursive: true });
+  await mkdir(resultsDir, { recursive: true });
+
+  const eventsPath = path.join(jobsDir, `${jobId}.jsonl`);
+  const resultPath = path.join(resultsDir, `${jobId}.json`);
   const eventsStream = createWriteStream(eventsPath, { flags: "a" });
 
   const closeEvents = () =>
@@ -86,11 +134,30 @@ async function main() {
     });
 
   try {
-    const target = project.target === "web" ? "web" : "desktop";
+    const desktopApp =
+      (await isFile(path.join(workspaceDir, "desktop-schema.sql"))) &&
+      (await isFile(path.join(workspaceDir, "db.js")));
+
+    const target = desktopApp
+      ? "desktop"
+      : mode === "modify"
+        ? "web"
+        : project.target === "web"
+          ? "web"
+          : "desktop";
+
+    const instruction = job.instruction?.trim() ?? "";
+
+    if (mode === "modify" && !instruction) {
+      throw new Error("Missing modification instruction.");
+    }
+
     const result = await generateApp({
-      prompt: project.prompt,
+      prompt: mode === "modify" ? instruction : project.prompt,
+      context: project.prompt,
       workspaceDir,
       target,
+      mode,
       onEvent(event) {
         try {
           eventsStream.write(`${JSON.stringify(sanitize(event))}\n`);
@@ -110,6 +177,21 @@ async function main() {
     }
 
     if (result.ok) {
+      const summary = result.summary.trim();
+
+      if (summary) {
+        await prisma.projectMessage
+          .create({
+            data: {
+              projectId,
+              jobId,
+              role: "agent",
+              content: summary.slice(0, 4000),
+            },
+          })
+          .catch(() => undefined);
+      }
+
       await prisma.project.update({
         where: { id: projectId },
         data: { status: "ready", lastActivityAt: new Date() },

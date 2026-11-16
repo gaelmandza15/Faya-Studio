@@ -334,6 +334,13 @@ export const fr = {
     generatedSummary: "Application générée",
     modificationsSoon:
       "Les modifications par conversation seront branchées à l'étape suivante.",
+    modifyBusy: "Une génération est déjà en cours.",
+    modifyNotReady: "Générez d'abord l'application.",
+    modifyInvalid: "Votre message est trop court.",
+    modifyFailed: "Impossible de lancer la modification.",
+    requestError: "Action impossible",
+    composerHint:
+      "Décrivez la modification à apporter à l'application.",
     errorTitle: "La génération a échoué",
     errorHint: "Vous pouvez relancer la génération pour réessayer.",
     tools: {

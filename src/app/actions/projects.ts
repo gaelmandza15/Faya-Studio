@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getDictionary } from "@/i18n/get-dictionary";
 import { getLocale } from "@/i18n/server";
 import { db } from "@/lib/db";
-import { enqueueGeneration } from "@/engine/jobs";
+import { enqueueGeneration, enqueueModification } from "@/engine/jobs";
 import { toProjectIcon } from "@/lib/project-utils";
 import type { ProjectIcon } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -98,6 +98,18 @@ export async function startProjectAction(input: {
         lastActivityAt: new Date(),
       },
     });
+
+    await db.projectMessage
+      .create({
+        data: {
+          projectId: project.id,
+          role: "user",
+          content: parsed.data.prompt,
+        },
+      })
+      .catch((error) => {
+        console.error("Failed to persist initial message", error);
+      });
 
     try {
       await enqueueGeneration(project.id);
@@ -249,9 +261,23 @@ export async function retryGenerationAction(projectId: string) {
       return { error: "notFound" as const };
     }
 
+    const latest = await db.generationJob.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (latest?.kind === "modify" && latest.instruction) {
+      const { job } = await enqueueModification(
+        projectId,
+        latest.instruction,
+      );
+      revalidateProjectViews();
+      return { ok: true as const, jobId: job.id, kind: "modify" };
+    }
+
     const { job } = await enqueueGeneration(projectId);
     revalidateProjectViews();
-    return { ok: true as const, jobId: job.id };
+    return { ok: true as const, jobId: job.id, kind: "generate" };
   } catch (error) {
     console.error("Generation retry failed", error);
     return { error: "generic" as const };

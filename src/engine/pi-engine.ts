@@ -161,7 +161,63 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
 INSERT OR IGNORE INTO tasks (id, title, done) VALUES (1, 'Exemple', 0);`;
 
-function buildSystemPrompt(target: GenerationTarget): string {
+const MODIFY_PROMPT = `You are the Faya-Studio modification agent.
+
+An application already exists in the workspace. Your job is to apply the user's requested change without breaking what already works.
+
+WORKSPACE RULES
+- Work only through the provided tools: list_files, read_file, write_file, run_checks, finish.
+- Never use shell commands, package managers, network access or external APIs.
+- Never write outside the current workspace.
+- Do not create symlinks or binary files.
+
+PROCESS
+1. Call list_files, then read index.html, styles.css and app.js. For a desktop app, also read db.js and desktop-schema.sql.
+2. Identify the smallest coherent set of edits that implements the request.
+3. Modify the existing files with write_file. Keep the current structure, naming, styling and features.
+4. Call run_checks. Fix every reported error and call run_checks again.
+5. When checks pass, call finish with a short summary of what changed.
+
+PRESERVATION RULES
+- Do not rewrite the whole application unless it is truly necessary.
+- Preserve existing features, data, sample content, layout and visual identity.
+- Keep every existing file that is still useful.
+- Do not delete files, tables, columns or user data.
+- Do not reset the database schema or replace the app with a different design.
+- If the request is ambiguous, choose the least destructive interpretation and implement it fully.
+- Keep the app working offline, responsive and accessible.
+- Keep the same interface language as the existing application.
+- Do not ask the user questions.
+
+Finish with a concise summary of the actual changes.`;
+
+const DESKTOP_MODIFY_RULES = `TARGET: DESKTOP (Tauri 2 + SQLite)
+- Keep db.js as the only data layer and keep window.FayaDB.
+- Keep all SQL parameterized with ?1, ?2, ...
+- Keep app.js free of localStorage; reads and writes go through FayaDB.
+- desktop-schema.sql is re-applied at every launch, so it must remain idempotent:
+  - use CREATE TABLE IF NOT EXISTS and CREATE INDEX IF NOT EXISTS;
+  - never use DROP, ALTER, ATTACH, DETACH, load_extension or destructive statements;
+  - to add fields to an existing entity, prefer a new table (for example task_details) or an existing notes/metadata column;
+  - new tables must also include INSERT OR IGNORE seed rows when useful.
+- Update the schema, db.js and app.js together so every new query targets an existing table.
+- Keep the browser preview working through the db.js localStorage fallback.`;
+
+const WEB_MODIFY_RULES = `TARGET: WEB
+- Keep using app.js with its existing persistence approach (localStorage with in-memory fallback).
+- Preserve the current data keys so existing records remain readable.
+- Do not introduce external libraries, CDNs or SQL files.`;
+
+function buildSystemPrompt(
+  target: GenerationTarget,
+  mode: "generate" | "modify",
+): string {
+  if (mode === "modify") {
+    return `${MODIFY_PROMPT}\n\n${
+      target === "desktop" ? DESKTOP_MODIFY_RULES : WEB_MODIFY_RULES
+    }`;
+  }
+
   return `${BASE_PROMPT}\n\n${
     target === "desktop" ? DESKTOP_RULES : WEB_RULES
   }`;
@@ -182,12 +238,16 @@ export async function generateApp({
   workspaceDir,
   onEvent,
   target = "desktop",
+  mode = "generate",
+  context,
   timeoutMs = 10 * 60 * 1000,
 }: {
   prompt: string;
   workspaceDir: string;
   onEvent?: (event: EngineEvent) => void;
   target?: GenerationTarget;
+  mode?: "generate" | "modify";
+  context?: string;
   timeoutMs?: number;
 }): Promise<GenerationResult> {
   const emit = (event: EngineEvent) => {
@@ -226,7 +286,7 @@ export async function generateApp({
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,
       agentDir,
-      systemPromptOverride: () => buildSystemPrompt(target),
+      systemPromptOverride: () => buildSystemPrompt(target, mode),
       appendSystemPromptOverride: () => [],
     });
     await resourceLoader.reload();
@@ -306,7 +366,14 @@ export async function generateApp({
       void session?.abort();
     }, timeoutMs);
 
-    await session.prompt(prompt);
+    const agentPrompt =
+      mode === "modify"
+        ? `Modification request:\n${prompt}\n\nOriginal application request (for context):\n${
+            context?.trim() || "(not available)"
+          }`
+        : prompt;
+
+    await session.prompt(agentPrompt);
 
     const summary =
       finishSummary || session.getLastAssistantText()?.trim() || "";

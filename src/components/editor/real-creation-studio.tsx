@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Eye, MessageSquare } from "lucide-react";
 import { retryGenerationAction } from "@/app/actions/projects";
+import { sendProjectMessageAction } from "@/app/actions/conversation";
 import { EditorTopbar } from "@/components/editor/editor-topbar";
 import { ExportDialog } from "@/components/editor/export-dialog";
 import { PreviewPanel } from "@/components/editor/preview-panel";
@@ -13,6 +14,7 @@ import { useI18n } from "@/i18n/provider";
 import type {
   GenerationStatus,
   PreviewDevice,
+  ProjectMessageView,
   ProjectStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -21,9 +23,17 @@ type MobileTab = "conversation" | "preview";
 
 interface GenerationPayload {
   projectStatus: ProjectStatus;
-  job: { id: string; status: string; error: string | null } | null;
+  job: {
+    id: string;
+    status: string;
+    error: string | null;
+    kind: string;
+    instruction: string | null;
+  } | null;
   events: EngineEvent[];
+  eventsReset: boolean;
   nextCursor: number;
+  messages: ProjectMessageView[];
   previewReady: boolean;
   summary: string;
 }
@@ -43,6 +53,7 @@ export function RealCreationStudio({
 }) {
   const { dict } = useI18n();
   const [events, setEvents] = useState<EngineEvent[]>([]);
+  const [messages, setMessages] = useState<ProjectMessageView[]>([]);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] =
@@ -55,6 +66,7 @@ export function RealCreationStudio({
   const [refreshKey, setRefreshKey] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [retrying, startRetry] = useTransition();
+  const [sending, setSending] = useState(false);
   const isSmallScreen = useMediaQuery("(max-width: 1023px)");
   const [deviceOverride, setDeviceOverride] =
     useState<PreviewDevice | null>(null);
@@ -62,6 +74,7 @@ export function RealCreationStudio({
     deviceOverride ?? (isSmallScreen ? "mobile" : "desktop");
   const [mobileTab, setMobileTab] = useState<MobileTab>("conversation");
   const finalPollRef = useRef(false);
+  const jobIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,8 +84,11 @@ export function RealCreationStudio({
 
     async function poll() {
       try {
+        const activeJob = jobIdRef.current;
         const response = await fetch(
-          `/api/projects/${projectId}/generation?after=${cursor}`,
+          `/api/projects/${projectId}/generation?after=${cursor}${
+            activeJob ? `&job=${encodeURIComponent(activeJob)}` : ""
+          }`,
           { cache: "no-store" },
         );
 
@@ -83,15 +99,19 @@ export function RealCreationStudio({
         const data = (await response.json()) as GenerationPayload;
         if (cancelled) return;
 
-        if (data.events.length > 0) {
+        if (data.eventsReset) {
+          setEvents(data.events);
+        } else if (data.events.length > 0) {
           setEvents((current) => [...current, ...data.events]);
         }
 
         cursor = data.nextCursor;
-        setJobStatus(data.job?.status ?? null);
+        jobIdRef.current = data.job?.id ?? null;
         setJobId(data.job?.id ?? null);
+        setJobStatus(data.job?.status ?? null);
         setProjectStatus(data.projectStatus);
         setJobError(data.job?.error ?? null);
+        setMessages(data.messages ?? []);
         setSummary(data.summary ?? "");
         setPreviewReady(Boolean(data.previewReady));
         setPollError(null);
@@ -199,17 +219,63 @@ export function RealCreationStudio({
         setEvents([]);
         setJobStatus("queued");
         setJobId(null);
+        jobIdRef.current = null;
         setProjectStatus("generating");
         setSummary("");
         setJobError(null);
         setPollError(null);
-        setPreviewReady(false);
         setNoJob(false);
+
+        if (result.kind !== "modify") {
+          setPreviewReady(false);
+        }
+
         setRefreshKey((key) => key + 1);
       } else {
         setPollError(dict.toasts.actionFailed);
       }
     });
+  }
+
+  async function handleSend(message: string): Promise<boolean> {
+    if (sending || status === "running" || !previewReady) return false;
+
+    setSending(true);
+
+    try {
+      const result = await sendProjectMessageAction(projectId, message);
+
+      if ("jobId" in result) {
+        setEvents([]);
+        setJobStatus("queued");
+        setJobId(null);
+        jobIdRef.current = null;
+        setProjectStatus("generating");
+        setSummary("");
+        setJobError(null);
+        setPollError(null);
+        setNoJob(false);
+        setRefreshKey((key) => key + 1);
+        return true;
+      }
+
+      if (result.error === "busy") {
+        setPollError(dict.editor.modifyBusy);
+      } else if (result.error === "notReady") {
+        setPollError(dict.editor.modifyNotReady);
+      } else if (result.error === "invalid") {
+        setPollError(dict.editor.modifyInvalid);
+      } else {
+        setPollError(dict.editor.modifyFailed);
+      }
+
+      return false;
+    } catch {
+      setPollError(dict.editor.modifyFailed);
+      return false;
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -277,14 +343,18 @@ export function RealCreationStudio({
         >
           <RealConversationPanel
             projectPrompt={initialPrompt}
+            messages={messages}
             events={events}
             status={status}
             summary={summary}
             error={jobError || pollError}
             noJob={noJob}
             previewReady={previewReady}
+            currentJobId={jobId}
             onRetry={handleRetry}
+            onSend={handleSend}
             retrying={retrying}
+            sending={sending}
           />
         </aside>
 

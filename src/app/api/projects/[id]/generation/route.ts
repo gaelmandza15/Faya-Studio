@@ -5,6 +5,28 @@ import { getWorkspacesRoot } from "@/engine/workspace";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
+async function readEvents(
+  eventsPath: string,
+): Promise<EngineEvent[] | null> {
+  try {
+    const raw = await readFile(eventsPath, "utf8");
+
+    return raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.parse(line) as EngineEvent;
+        } catch {
+          return null;
+        }
+      })
+      .filter((event): event is EngineEvent => event !== null);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -37,35 +59,43 @@ export async function GET(
     orderBy: { createdAt: "desc" },
   });
 
+  const messages = await db.projectMessage.findMany({
+    where: { projectId: id },
+    orderBy: { createdAt: "asc" },
+  });
+
   const workspaceDir = path.join(getWorkspacesRoot(), id);
-  const eventsPath = path.join(workspaceDir, ".faya", "events.jsonl");
-  const resultPath = path.join(workspaceDir, ".faya", "result.json");
+  const legacyEventsPath = path.join(
+    workspaceDir,
+    ".faya",
+    "events.jsonl",
+  );
+  const legacyResultPath = path.join(
+    workspaceDir,
+    ".faya",
+    "result.json",
+  );
 
-  let events: EngineEvent[] = [];
+  const jobEvents = job
+    ? await readEvents(
+        path.join(workspaceDir, ".faya", "jobs", `${job.id}.jsonl`),
+      )
+    : null;
 
-  try {
-    const raw = await readFile(eventsPath, "utf8");
-    events = raw
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        try {
-          return JSON.parse(line) as EngineEvent;
-        } catch {
-          return null;
-        }
-      })
-      .filter((event): event is EngineEvent => event !== null);
-  } catch {
-    // No events yet.
-  }
+  const events =
+    jobEvents ?? (await readEvents(legacyEventsPath)) ?? [];
 
   const url = new URL(request.url);
   const after = Math.max(
     0,
     Number.parseInt(url.searchParams.get("after") ?? "0", 10) || 0,
   );
-  const sliced = events.slice(after);
+  const clientJobId = url.searchParams.get("job");
+  const eventsReset = job
+    ? clientJobId !== job.id || after > events.length
+    : false;
+  const start = eventsReset ? 0 : after;
+  const sliced = events.slice(start);
 
   const terminal =
     job?.status === "done" ||
@@ -75,15 +105,32 @@ export async function GET(
   let summary = "";
 
   if (terminal) {
-    try {
-      const result = JSON.parse(
-        await readFile(resultPath, "utf8"),
-      ) as { summary?: unknown };
-      if (typeof result.summary === "string") {
-        summary = result.summary;
+    const resultPaths = job
+      ? [
+          path.join(
+            workspaceDir,
+            ".faya",
+            "results",
+            `${job.id}.json`,
+          ),
+          legacyResultPath,
+        ]
+      : [legacyResultPath];
+
+    for (const resultPath of resultPaths) {
+      try {
+        const result = JSON.parse(
+          await readFile(resultPath, "utf8"),
+        ) as { summary?: unknown };
+
+        if (typeof result.summary === "string") {
+          summary = result.summary;
+        }
+
+        break;
+      } catch {
+        // Try the next result location.
       }
-    } catch {
-      // No result file.
     }
   }
 
@@ -100,10 +147,24 @@ export async function GET(
     {
       projectStatus: project.status,
       job: job
-        ? { id: job.id, status: job.status, error: job.error }
+        ? {
+            id: job.id,
+            status: job.status,
+            error: job.error,
+            kind: job.kind,
+            instruction: job.instruction,
+          }
         : null,
       events: sliced,
-      nextCursor: after + sliced.length,
+      eventsReset,
+      nextCursor: start + sliced.length,
+      messages: messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        jobId: message.jobId,
+        createdAt: message.createdAt,
+      })),
       previewReady,
       summary,
     },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -10,13 +10,17 @@ import {
   PencilLine,
   Play,
   RotateCcw,
+  Send,
   ShieldCheck,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import type { EngineEvent } from "@/engine/pi-engine";
 import { useI18n } from "@/i18n/provider";
-import type { GenerationStatus } from "@/lib/types";
+import type {
+  GenerationStatus,
+  ProjectMessageView,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type TranscriptItem =
@@ -41,27 +45,36 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
 
 export function RealConversationPanel({
   projectPrompt,
+  messages,
   events,
   status,
   summary,
   error,
   noJob,
   previewReady,
+  currentJobId,
   onRetry,
+  onSend,
   retrying,
+  sending,
 }: {
   projectPrompt: string;
+  messages: ProjectMessageView[];
   events: EngineEvent[];
   status: GenerationStatus;
   summary: string;
   error: string | null;
   noJob: boolean;
   previewReady: boolean;
+  currentJobId: string | null;
   onRetry: () => void;
+  onSend: (message: string) => Promise<boolean>;
   retrying: boolean;
+  sending: boolean;
 }) {
   const { dict } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState("");
 
   const transcript = useMemo<TranscriptItem[]>(() => {
     const items: TranscriptItem[] = [];
@@ -112,11 +125,33 @@ export function RealConversationPanel({
     const node = scrollRef.current;
     if (!node) return;
     node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-  }, [events.length, status, noJob]);
+  }, [messages.length, events.length, status, noJob]);
 
+  const currentAgentMessage = currentJobId
+    ? messages.find(
+        (message) =>
+          message.role === "agent" && message.jobId === currentJobId,
+      )
+    : undefined;
+  const showLive = status === "running" || !currentAgentMessage;
+  const canCompose = previewReady && status === "done";
   const agentStatus =
-    status === "error" ? dict.editor.failed : status === "running" ? dict.editor.agentWorking : dict.editor.agentAvailable;
-  const canRetry = status === "error" || noJob || (status === "done" && !previewReady);
+    status === "error"
+      ? dict.editor.failed
+      : status === "running"
+        ? dict.editor.agentWorking
+        : dict.editor.agentAvailable;
+  const canRetry =
+    status === "error" ||
+    noJob ||
+    (status === "done" && !previewReady);
+
+  async function submit() {
+    const value = draft.trim();
+    if (!value || !canCompose || sending) return;
+    const started = await onSend(value);
+    if (started) setDraft("");
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -152,29 +187,26 @@ export function RealConversationPanel({
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
-          <div className="flex items-start justify-end gap-2">
-            <div className="max-w-[86%] rounded-2xl rounded-tr-md border border-[#1be67a]/20 bg-[#1be67a]/10 px-3 py-2 text-[12.5px] leading-relaxed text-slate-100">
-              {projectPrompt}
-            </div>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#19c765] text-[10px] font-bold text-white">
-              JD
-            </span>
-          </div>
+          {messages.length === 0 && (
+            <UserBubble text={projectPrompt} />
+          )}
 
-          {transcript.map((item, index) =>
-            item.kind === "text" ? (
-              <div key={`text-${index}`} className="flex items-start gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#1be67a]/25 bg-[#1be67a]/10 text-[#1be67a]">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </span>
-                <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#141d25] px-3 py-2 text-[12.5px] leading-relaxed text-slate-200">
-                  {item.text}
-                </div>
-              </div>
+          {messages.map((message) =>
+            message.role === "agent" ? (
+              <AgentBubble key={message.id} text={message.content} />
             ) : (
-              <ToolItem key={item.id} item={item} />
+              <UserBubble key={message.id} text={message.content} />
             ),
           )}
+
+          {showLive &&
+            transcript.map((item, index) =>
+              item.kind === "text" ? (
+                <AgentBubble key={`text-${index}`} text={item.text} />
+              ) : (
+                <ToolItem key={item.id} item={item} />
+              ),
+            )}
 
           {status === "running" && transcript.length === 0 && !noJob && (
             <div className="flex items-start gap-2">
@@ -209,16 +241,26 @@ export function RealConversationPanel({
             />
           )}
 
-          {status === "done" && summary && (
-            <div className="rounded-xl border border-[#1be67a]/20 bg-[#1be67a]/5 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1be67a]">
-                {dict.editor.generatedSummary}
-              </p>
-              <p className="mt-1.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-300">
-                {summary}
-              </p>
-            </div>
+          {error && status !== "error" && (
+            <StatusCard
+              tone="error"
+              title={dict.editor.requestError}
+              description={error}
+            />
           )}
+
+          {status === "done" &&
+            summary &&
+            !currentAgentMessage && (
+              <div className="rounded-xl border border-[#1be67a]/20 bg-[#1be67a]/5 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1be67a]">
+                  {dict.editor.generatedSummary}
+                </p>
+                <p className="mt-1.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-300">
+                  {summary}
+                </p>
+              </div>
+            )}
 
           {canRetry && (
             <button
@@ -243,9 +285,84 @@ export function RealConversationPanel({
       </div>
 
       <div className="shrink-0 border-t border-white/[0.08] bg-[#0b1116] p-3">
-        <div className="rounded-xl border border-white/[0.06] bg-[#11191f] px-3 py-2.5 text-[11px] leading-relaxed text-slate-500">
-          {dict.editor.modificationsSoon}
-        </div>
+        {canCompose ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="rounded-xl border border-white/[0.08] bg-[#11191f] focus-within:border-[#1be67a]/40">
+              <textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void submit();
+                  }
+                }}
+                rows={2}
+                disabled={sending}
+                placeholder={dict.editor.composerPlaceholder}
+                aria-label={dict.editor.messageAria}
+                className="w-full resize-none bg-transparent px-3 pt-2.5 text-[12px] leading-relaxed text-slate-200 outline-none placeholder:text-slate-500 disabled:opacity-60"
+              />
+              <div className="flex items-center justify-between gap-2 px-2 pb-2">
+                <span className="px-1 text-[9.5px] text-slate-500">
+                  {dict.editor.sendHint}
+                </span>
+                <button
+                  type="submit"
+                  disabled={!draft.trim() || sending}
+                  aria-label={dict.editor.sendAria}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#1be67a] text-slate-950 transition hover:bg-[#16cf6c] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {sending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <p className="mt-1.5 px-1 text-[9.5px] text-slate-500">
+              {dict.editor.composerHint}
+            </p>
+          </form>
+        ) : (
+          <div className="rounded-xl border border-white/[0.06] bg-[#11191f] px-3 py-2.5 text-[11px] leading-relaxed text-slate-500">
+            {status === "running"
+              ? dict.editor.composerBusy
+              : dict.editor.previewNotReady}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserBubble({ text }: { text: string }) {
+  return (
+    <div className="flex items-start justify-end gap-2">
+      <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-tr-md border border-[#1be67a]/20 bg-[#1be67a]/10 px-3 py-2 text-[12.5px] leading-relaxed text-slate-100">
+        {text}
+      </div>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#19c765] text-[10px] font-bold text-white">
+        JD
+      </span>
+    </div>
+  );
+}
+
+function AgentBubble({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#1be67a]/25 bg-[#1be67a]/10 text-[#1be67a]">
+        <Sparkles className="h-3.5 w-3.5" />
+      </span>
+      <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#141d25] px-3 py-2 text-[12.5px] leading-relaxed text-slate-200">
+        {text}
       </div>
     </div>
   );

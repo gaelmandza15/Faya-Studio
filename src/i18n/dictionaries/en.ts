@@ -323,6 +323,12 @@ export const en: Dictionary = {
     generatedSummary: "App generated",
     modificationsSoon:
       "Conversation-based changes will be connected in the next step.",
+    modifyBusy: "A generation is already running.",
+    modifyNotReady: "Generate the app first.",
+    modifyInvalid: "Your message is too short.",
+    modifyFailed: "Unable to start the modification.",
+    requestError: "Action failed",
+    composerHint: "Describe the change to apply to the app.",
     errorTitle: "Generation failed",
     errorHint: "You can retry the generation.",
     tools: {

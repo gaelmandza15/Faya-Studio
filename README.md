@@ -124,15 +124,34 @@ Chaque projet créé depuis l'interface déclenche une génération réelle :
 - `startProjectAction` crée le projet, un `GenerationJob` et lance un worker
   Node détaché (`scripts/generation-worker.ts`).
 - Le worker exécute Pi/DeepSeek, écrit les événements dans
-  `workspaces/<projectId>/.faya/events.jsonl`, les logs dans
-  `workspaces/.logs/<jobId>.log` et le résultat dans `result.json`.
+  `workspaces/<projectId>/.faya/jobs/<jobId>.jsonl`, les logs dans
+  `workspaces/.logs/<jobId>.log` et le résultat dans
+  `.faya/results/<jobId>.json`.
 - L'éditeur `/creer?project=<id>` interroge
-  `/api/projects/<id>/generation?after=<curseur>` et affiche la conversation
-  réelle, les outils utilisés, la progression et le résumé.
+  `/api/projects/<id>/generation?after=<curseur>&job=<jobId>` et affiche la
+  conversation réelle, les outils utilisés, la progression et le résumé.
 - Une fois prêt, l'application générée est chargée dans une iframe via
   `/api/workspaces/<projectId>/index.html`.
 - Les projets existants sans aperçu (données de démonstration) proposent un
   bouton « Générer l'application ».
+
+## Modification par conversation
+
+Après une génération, l'utilisateur peut demander une modification directement
+dans l'éditeur :
+
+- `ProjectMessage` conserve les messages utilisateur et agent ;
+- `sendProjectMessageAction` crée un `GenerationJob` de type `modify` avec
+  l'instruction, puis lance le worker sans effacer le workspace ;
+- le prompt de modification impose de lire l'application existante, de changer
+  le minimum de fichiers et de préserver les fonctionnalités, les données et
+  l'identité visuelle ;
+- pour une application desktop, le schéma SQLite doit rester idempotent :
+  `CREATE TABLE IF NOT EXISTS` est autorisé, `ALTER`/`DROP` sont interdits ;
+- les événements et résultats sont stockés par job, ce qui permet de rejouer
+  la conversation sans mélanger les générations ;
+- un échec peut être relancé avec la même instruction via
+  `retryGenerationAction`.
 
 Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
 tâches dédiée sera nécessaire en production. La synchronisation cloud et le
