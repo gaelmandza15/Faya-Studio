@@ -20,6 +20,7 @@ import { installAppLinkRuntime } from "../src/engine/app-link-runtime";
 import { getWorkspacesRoot } from "../src/engine/workspace";
 import { refundCredits } from "../src/engine/credits";
 import { CREDIT_REFUND_REASONS } from "../src/lib/credit-costs";
+import { logger } from "../src/lib/logger";
 
 const prisma = new PrismaClient();
 
@@ -98,6 +99,9 @@ async function main() {
   if (!job || job.projectId !== projectId) {
     throw new Error(`Build job not found: ${jobId}`);
   }
+
+  const log = logger.child({ projectId, jobId });
+  log.info("Build started", { name: project.name });
 
   const latestVersion = await prisma.projectVersion.findFirst({
     where: { projectId },
@@ -260,9 +264,17 @@ async function main() {
       where: { id: projectId },
       data: { lastActivityAt: new Date() },
     });
+
+    log.info("Build finished", {
+      artifactName,
+      artifactSize: binaryInfo.size,
+      durationMs: result.durationMs,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : String(error);
+
+    log.error("Build failed", { error: message });
 
     await prisma.buildJob
       .update({
@@ -286,7 +298,9 @@ async function main() {
 }
 
 main().catch(async (error) => {
-  console.error(error);
+  logger.error("Build worker crashed", {
+    error: error instanceof Error ? error.message : String(error),
+  });
   await prisma.$disconnect().catch(() => undefined);
   process.exitCode = 1;
 });

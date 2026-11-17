@@ -15,6 +15,7 @@ import {
 } from "@/engine/project-db";
 import { applyChangesInTx } from "@/engine/sync-store";
 import { broadcastProjectUpdate } from "@/lib/project-events";
+import { logger } from "@/lib/logger";
 
 
 const CORS_HEADERS = {
@@ -171,6 +172,8 @@ export async function POST(
   if (!project) {
     return json({ error: "unauthorized" }, 401);
   }
+
+  const log = logger.child({ projectId: project.id, action });
 
   let body: Record<string, unknown>;
 
@@ -340,11 +343,13 @@ export async function POST(
             type: "desktop_push",
             timestamp: new Date().toISOString(),
           });
+          log.info("Desktop push mirrored to web db", {
+            accepted: result.accepted.length,
+          });
         } catch (error) {
-          console.warn(
-            "[sync] Could not mirror pushed changes to the web database:",
-            error instanceof Error ? error.message : error,
-          );
+          log.warn("Could not mirror pushed changes to web db", {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
 
@@ -358,7 +363,9 @@ export async function POST(
 
     return json({ error: "unknownAction" }, 404);
   } catch (error) {
-    console.error("sync api error", error);
+    log.error("sync api error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return json({ error: "serverError" }, 500);
   }
 }

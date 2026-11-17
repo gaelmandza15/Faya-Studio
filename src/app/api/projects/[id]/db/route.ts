@@ -5,6 +5,7 @@ import { can } from "@/lib/roles";
 import { rateLimit } from "@/lib/rate-limit";
 import { inspectSql } from "@/lib/sql-guard";
 import { assertWorkspaceId } from "@/engine/workspace";
+import { logger } from "@/lib/logger";
 import {
   diffSnapshots,
   getProjectDatabase,
@@ -35,6 +36,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const requestId = crypto.randomUUID();
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
@@ -50,6 +52,10 @@ export async function POST(
   });
 
   if (!limiter.success) {
+    logger.warn("Rate limit exceeded", {
+      requestId,
+      userId: session.userId,
+    });
     return NextResponse.json(
       { error: "Trop de requêtes. Veuillez ralentir." },
       {
@@ -62,6 +68,7 @@ export async function POST(
   }
 
   const { id: projectId } = await params;
+  const log = logger.child({ requestId, projectId, userId: session.userId });
   try {
     assertWorkspaceId(projectId);
   } catch {
@@ -126,16 +133,20 @@ export async function POST(
   const inspection = inspectSql(cmd, query);
 
   if (!inspection.ok) {
+    log.warn("SQL guard blocked query", { cmd, reason: inspection.error });
     return NextResponse.json({ error: inspection.error }, { status: 400 });
   }
 
   // RBAC checks: viewer can only execute read queries
   if (inspection.kind === "write" && !can(membership.role, "project.update")) {
+    log.warn("Write blocked by RBAC", { cmd, role: membership.role });
     return NextResponse.json(
       { error: "Votre rôle ne permet pas de modifier les données de cette application" },
       { status: 403 },
     );
   }
+
+  log.debug("DB request", { cmd, kind: inspection.kind });
 
   try {
     const database = await getProjectDatabase(projectId);
@@ -143,6 +154,7 @@ export async function POST(
 
     if (cmd === "db_select") {
       const rows = statement.all(...boundParams);
+      log.debug("db_select ok", { rows: (rows as unknown[]).length });
       return NextResponse.json({ ok: true, result: rows });
     }
 
@@ -181,13 +193,16 @@ export async function POST(
               clientId,
               timestamp: now.toISOString(),
             });
+            log.info("Web write synced", {
+              table: target.table,
+              changes: changes.length,
+            });
           }
         }
       } catch (error) {
-        console.warn(
-          "[web-db] Could not record sync changes:",
-          error instanceof Error ? error.message : error,
-        );
+        log.warn("Could not record sync changes", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -198,6 +213,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    log.error("DB execution error", { error: message, cmd });
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

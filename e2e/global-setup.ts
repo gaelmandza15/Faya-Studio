@@ -136,6 +136,50 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+async function warmLocalRoutes(baseURL: string, cookie: string) {
+  const healthUrl = `${baseURL}/api/health`;
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const response = await fetch(healthUrl, { cache: "no-store" });
+      if (response.ok) break;
+    } catch {
+      // Server may still be starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  const urls = [
+    `${baseURL}/`,
+    `${baseURL}/applications`,
+    `${baseURL}/applications/${PROJECT_ID}`,
+    `${baseURL}/app/${PROJECT_ID}`,
+    `${baseURL}/api/workspaces/${PROJECT_ID}/index.html`,
+    `${baseURL}/api/workspaces/${PROJECT_ID}/styles.css`,
+    `${baseURL}/api/workspaces/${PROJECT_ID}/app.js`,
+    healthUrl,
+  ];
+  const started = Date.now();
+
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const response = await fetch(url, {
+          headers: { cookie },
+          cache: "no-store",
+        });
+        await response.text();
+      } catch {
+        // Best-effort warmup only.
+      }
+    }),
+  );
+
+  console.log(
+    `[e2e] Warmed ${urls.length} routes in ${Date.now() - started}ms.`,
+  );
+}
+
 export default async function globalSetup() {
   if (process.env.E2E_REMOTE === "1") {
     await setupRemote();
@@ -281,6 +325,11 @@ export default async function globalSetup() {
         "utf8",
       ),
     ]);
+
+    await warmLocalRoutes(
+      process.env.E2E_BASE_URL ?? "http://localhost:3000",
+      `faya_session=${token}; faya_org=${membership.organizationId}; faya_locale=fr`,
+    );
 
     console.log(
       `[e2e] Seeded ${PROJECT_NAME} (${PROJECT_ID}) and a test session.`,

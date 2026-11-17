@@ -10,6 +10,10 @@ utilisateurs, organisations, projets, crédits et builds dans une base SQLite vi
 Prisma. Les applications générées peuvent être exportées en exécutable Windows
 Tauri 2 avec une base SQLite locale.
 
+La suite du développement (abstractions, staging cloud sans Docker, cycle de
+vie des applications) est planifiée dans
+[`docs/roadmap.md`](docs/roadmap.md).
+
 ## Démarrage
 
 ```bash
@@ -67,6 +71,17 @@ demo@faya-studio.app / demo1234
 
 L'éditeur accepte `?project=<id>` pour ouvrir un projet existant, ou
 `?prompt=<demande>&name=<nom>` pour un aperçu non persisté.
+
+## Observabilité
+
+- `GET /api/health` : sonde publique (app + base), réponse 200/503 avec
+  `version`, `timestamp`, `db`, `requestId` et `Cache-Control: no-store`.
+- Logs JSON structurés via `src/lib/logger.ts`, avec `requestId`, `projectId`,
+  `jobId` et `userId`. Niveau réglable avec `LOG_LEVEL`
+  (`debug|info|warn|error`).
+- Les workers de génération et de build utilisent le même logger.
+- `src/lib/env.ts` valide `DATABASE_URL`, les URLs et les niveaux au démarrage ;
+  `next.config.ts` échoue tôt si la configuration est invalide.
 
 ## Base de données
 

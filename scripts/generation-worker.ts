@@ -11,6 +11,7 @@ import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
 import { getWorkspacesRoot } from "../src/engine/workspace";
 import { refundCredits } from "../src/engine/credits";
 import { CREDIT_REFUND_REASONS } from "../src/lib/credit-costs";
+import { logger } from "../src/lib/logger";
 import {
   clearProjectFiles,
   createProjectVersion,
@@ -82,7 +83,9 @@ async function main() {
     throw new Error(`Generation job not found: ${jobId}`);
   }
 
+  const log = logger.child({ projectId, jobId });
   const mode = job.kind === "modify" ? "modify" : "generate";
+  log.info("Generation started", { mode, name: project.name });
 
   await prisma.generationJob.update({
     where: { id: jobId },
@@ -136,7 +139,9 @@ async function main() {
     try {
       return await restoreLatestProjectFiles(prisma, projectId);
     } catch (error) {
-      console.error("Failed to restore the previous version", error);
+      log.error("Failed to restore the previous version", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return undefined;
     }
   };
@@ -227,7 +232,9 @@ async function main() {
           summary: summary || null,
         });
       } catch (error) {
-        console.error("Failed to snapshot project version", error);
+        log.error("Failed to snapshot project version", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
 
       if (summary) {
@@ -311,7 +318,9 @@ async function main() {
 }
 
 main().catch(async (error) => {
-  console.error(error);
+  logger.error("Generation worker crashed", {
+    error: error instanceof Error ? error.message : String(error),
+  });
   await prisma.$disconnect().catch(() => undefined);
   process.exitCode = 1;
 });
