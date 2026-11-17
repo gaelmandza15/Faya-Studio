@@ -8,6 +8,7 @@ import {
 import { CreditsActions } from "@/components/credits/credits-actions";
 import { formatDate, formatNumber } from "@/i18n/format";
 import { getI18n } from "@/i18n/server";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 import { db } from "@/lib/db";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -29,13 +30,17 @@ export default async function CreditsPage() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const usedThisMonth = transactions
-    .filter(
-      (transaction) =>
-        transaction.amount < 0 &&
-        transaction.createdAt >= startOfMonth,
-    )
-    .reduce((total, transaction) => total - transaction.amount, 0);
+  const usedThisMonth = Math.max(
+    0,
+    transactions
+      .filter(
+        (transaction) =>
+          transaction.createdAt >= startOfMonth &&
+          (transaction.amount < 0 ||
+            transaction.reason.startsWith("refund_")),
+      )
+      .reduce((total, transaction) => total - transaction.amount, 0),
+  );
 
   const planLabel =
     dict.topbar.plans[
@@ -90,6 +95,27 @@ export default async function CreditsPage() {
         <p className="mt-4 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-2.5 text-[11.5px] text-slate-400">
           {dict.creditsPage.note}
         </p>
+
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(["generation", "modification", "build"] as const).map(
+            (action) => (
+              <div
+                key={action}
+                className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-2.5"
+              >
+                <span className="text-[11.5px] text-slate-400">
+                  {dict.creditReasons[action]}
+                </span>
+                <span className="text-[11.5px] font-semibold text-slate-200">
+                  {dict.creditsPage.cost.replace(
+                    "{count}",
+                    formatNumber(locale, CREDIT_COSTS[action]),
+                  )}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
 
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {kpis.map((kpi) => {

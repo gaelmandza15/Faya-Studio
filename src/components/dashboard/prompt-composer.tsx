@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useI18n } from "@/i18n/provider";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 import { getDemoData } from "@/lib/mock-data";
 import type { SuggestionIcon } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,8 @@ export function PromptComposer() {
 
       if ("projectId" in result) {
         router.push(`/creer?project=${result.projectId}`);
+      } else if (result.error === "insufficientCredits") {
+        toast(dict.toasts.insufficientCredits);
       } else {
         toast(dict.toasts.actionFailed);
       }
@@ -147,6 +150,13 @@ export function PromptComposer() {
             </TooltipTrigger>
             <TooltipContent>{dict.dashboard.voiceInput}</TooltipContent>
           </Tooltip>
+
+          <span className="hidden text-[11px] text-slate-500 sm:inline">
+            {dict.dashboard.creditCost.replace(
+              "{count}",
+              String(CREDIT_COSTS.generation),
+            )}
+          </span>
 
           <button
             type="submit"

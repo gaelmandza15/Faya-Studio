@@ -85,6 +85,7 @@ export const fr = {
     promptPlaceholderLine2: "avec recherche et export PDF...",
     promptAria: "Décrivez l'application que vous souhaitez créer",
     createApp: "Créer mon app",
+    creditCost: "{count} crédits par génération",
     voiceInput: "Dictée vocale",
     moreExamples: "Plus d'exemples...",
     fewerExamples: "Moins d'exemples",
@@ -213,7 +214,8 @@ export const fr = {
     amount: "Montant",
     recharge: "Recharger des crédits",
     upgrade: "Passer au niveau Pro",
-    note: "La génération est encore simulée : aucun crédit n'est débité pour le moment.",
+    note: "Les générations, modifications et exports desktop débitent réellement des crédits. Les échecs sont remboursés automatiquement.",
+    cost: "{count} crédits",
   },
   settingsPage: {
     eyebrow: "Configuration",
@@ -256,6 +258,10 @@ export const fr = {
     welcome: "Crédits de bienvenue",
     generation: "Génération d'application",
     modification: "Modification d'application",
+    build: "Export desktop",
+    refund_generation: "Remboursement de génération",
+    refund_modification: "Remboursement de modification",
+    refund_build: "Remboursement d'export",
     recharge: "Recharge de crédits",
   },
   editor: {
@@ -300,6 +306,7 @@ export const fr = {
       sqliteNote:
         "Exécutable Windows · données stockées sur l'appareil",
       start: "Créer l'exécutable",
+      startCost: "Créer l'exécutable · {count} crédits",
       starting: "Démarrage du build…",
       queued: "En attente du worker de build…",
       building: "Compilation de l'application Windows…",
@@ -338,9 +345,12 @@ export const fr = {
     modifyNotReady: "Générez d'abord l'application.",
     modifyInvalid: "Votre message est trop court.",
     modifyFailed: "Impossible de lancer la modification.",
+    insufficientCredits:
+      "Crédits insuffisants pour cette action. Rechargez votre solde.",
     requestError: "Action impossible",
     composerHint:
       "Décrivez la modification à apporter à l'application.",
+    composerCost: "{count} crédits par modification",
     versions: "Versions",
     versionsTitle: "Historique des versions",
     versionsDescription:
@@ -616,6 +626,8 @@ export const fr = {
     help: "Aide & support",
   },
   toasts: {
+    insufficientCredits:
+      "Crédits insuffisants. Rechargez votre solde pour continuer.",
     proOffer: "L'offre Pro sera disponible prochainement.",
     proOfferDescription: "Ce prototype présente uniquement l'interface.",
     organizationSelected: "Organisation « {name} » sélectionnée.",

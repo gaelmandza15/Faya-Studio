@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { exportProjectAction } from "@/app/actions/builds";
 import { useI18n } from "@/i18n/provider";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 import { cn } from "@/lib/utils";
 
 interface BuildJobView {
@@ -128,6 +129,10 @@ export function ExportDialog({
         setPollVersion((version) => version + 1);
       } else if (result.error === "notReady") {
         setPollError(labels.notReady);
+      } else if (result.error === "insufficientCredits") {
+        setPollError(dict.editor.insufficientCredits);
+      } else if (result.error === "busy") {
+        setPollError(dict.editor.modifyBusy);
       } else {
         setPollError(dict.toasts.actionFailed);
       }
@@ -280,7 +285,10 @@ export function ExportDialog({
               ) : (
                 <>
                   <Package className="h-4 w-4" />
-                  {labels.start}
+                  {labels.startCost.replace(
+                    "{count}",
+                    String(CREDIT_COSTS.build),
+                  )}
                 </>
               )}
             </button>

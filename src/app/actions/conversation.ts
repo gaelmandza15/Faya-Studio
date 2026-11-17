@@ -2,9 +2,15 @@
 
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getWorkspacesRoot } from "@/engine/workspace";
 import { enqueueModification } from "@/engine/jobs";
+import { chargeCredits, refundCredits } from "@/engine/credits";
+import {
+  CREDIT_COSTS,
+  CREDIT_REFUND_REASONS,
+} from "@/lib/credit-costs";
 import { db } from "@/lib/db";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -13,7 +19,13 @@ const messageSchema = z.string().trim().min(2).max(2000);
 export type SendProjectMessageResult =
   | { jobId: string }
   | {
-      error: "invalid" | "notFound" | "busy" | "notReady" | "generic";
+      error:
+        | "invalid"
+        | "notFound"
+        | "busy"
+        | "notReady"
+        | "insufficientCredits"
+        | "generic";
     };
 
 export async function sendProjectMessageAction(
@@ -64,14 +76,47 @@ export async function sendProjectMessageAction(
       return { error: "busy" };
     }
 
-    const { job, reused } = await enqueueModification(
-      projectId,
-      parsed.data,
-    );
+    const charge = await chargeCredits(db, {
+      organizationId: workspace.organization.id,
+      userId: workspace.user.id,
+      amount: CREDIT_COSTS.modification,
+      reason: "modification",
+    });
 
-    if (reused) {
+    if (!charge.ok) {
+      return {
+        error:
+          charge.reason === "insufficient"
+            ? "insufficientCredits"
+            : "generic",
+      };
+    }
+
+    let enqueued: Awaited<ReturnType<typeof enqueueModification>>;
+
+    try {
+      enqueued = await enqueueModification(
+        projectId,
+        parsed.data,
+        charge.transactionId,
+      );
+    } catch (error) {
+      await refundCredits(db, {
+        transactionId: charge.transactionId,
+        reason: CREDIT_REFUND_REASONS.modification,
+      });
+      throw error;
+    }
+
+    if (enqueued.reused) {
+      await refundCredits(db, {
+        transactionId: charge.transactionId,
+        reason: CREDIT_REFUND_REASONS.modification,
+      });
       return { error: "busy" };
     }
+
+    const { job } = enqueued;
 
     const existingMessages = await db.projectMessage.count({
       where: { projectId },
@@ -98,6 +143,8 @@ export async function sendProjectMessageAction(
       });
     });
 
+    revalidatePath("/creer");
+    revalidatePath("/");
     return { jobId: job.id };
   } catch (error) {
     console.error("Project message failed", error);

@@ -1,9 +1,14 @@
 import { spawn } from "node:child_process";
 import { mkdir, open } from "node:fs/promises";
 import path from "node:path";
+import { refundCredits } from "@/engine/credits";
+import { CREDIT_REFUND_REASONS } from "@/lib/credit-costs";
 import { db } from "@/lib/db";
 
-export async function enqueueBuild(projectId: string) {
+export async function enqueueBuild(
+  projectId: string,
+  creditTransactionId?: string,
+) {
   await db.buildJob.updateMany({
     where: {
       status: "running",
@@ -28,7 +33,11 @@ export async function enqueueBuild(projectId: string) {
   }
 
   const job = await db.buildJob.create({
-    data: { projectId, status: "queued" },
+    data: {
+      projectId,
+      status: "queued",
+      creditTransactionId: creditTransactionId ?? null,
+    },
   });
 
   const workerPath = path.join(
@@ -81,6 +90,13 @@ export async function enqueueBuild(projectId: string) {
           data: { status: "error", error: error.message },
         })
         .catch(() => undefined);
+
+      if (job.creditTransactionId) {
+        void refundCredits(db, {
+          transactionId: job.creditTransactionId,
+          reason: CREDIT_REFUND_REASONS.build,
+        });
+      }
     });
 
     child.unref();

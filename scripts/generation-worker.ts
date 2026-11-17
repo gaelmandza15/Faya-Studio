@@ -9,6 +9,8 @@ import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
 import { getWorkspacesRoot } from "../src/engine/workspace";
+import { refundCredits } from "../src/engine/credits";
+import { CREDIT_REFUND_REASONS } from "../src/lib/credit-costs";
 import {
   clearProjectFiles,
   createProjectVersion,
@@ -139,6 +141,18 @@ async function main() {
     }
   };
 
+  const refundCharge = async (): Promise<void> => {
+    if (!job.creditTransactionId) return;
+
+    await refundCredits(prisma, {
+      transactionId: job.creditTransactionId,
+      reason:
+        CREDIT_REFUND_REASONS[
+          mode === "modify" ? "modification" : "generation"
+        ],
+    });
+  };
+
   try {
     if (mode === "generate") {
       await clearProjectFiles(projectId);
@@ -238,6 +252,7 @@ async function main() {
         data: { status: "done", error: null },
       });
     } else {
+      await refundCharge();
       const restored = await restoreAfterFailure();
       await prisma.project.update({
         where: { id: projectId },
@@ -271,6 +286,7 @@ async function main() {
       () => undefined,
     );
 
+    await refundCharge();
     const restored = await restoreAfterFailure();
 
     await prisma.project

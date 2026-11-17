@@ -21,6 +21,7 @@ import type {
   GenerationStatus,
   ProjectMessageView,
 } from "@/lib/types";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 import { cn } from "@/lib/utils";
 
 type TranscriptItem =
@@ -328,6 +329,11 @@ export function RealConversationPanel({
             </div>
             <p className="mt-1.5 px-1 text-[9.5px] text-slate-500">
               {dict.editor.composerHint}
+              {" · "}
+              {dict.editor.composerCost.replace(
+                "{count}",
+                String(CREDIT_COSTS.modification),
+              )}
             </p>
           </form>
         ) : (

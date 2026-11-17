@@ -87,6 +87,7 @@ export const en: Dictionary = {
     promptPlaceholderLine2: "with search and PDF export...",
     promptAria: "Describe the app you want to create",
     createApp: "Create my app",
+    creditCost: "{count} credits per generation",
     voiceInput: "Voice input",
     moreExamples: "More examples...",
     fewerExamples: "Fewer examples",
@@ -211,7 +212,8 @@ export const en: Dictionary = {
     amount: "Amount",
     recharge: "Buy credits",
     upgrade: "Upgrade to Pro",
-    note: "Generation is still simulated: no credits are charged yet.",
+    note: "Generations, modifications and desktop exports debit credits. Failed jobs are refunded automatically.",
+    cost: "{count} credits",
   },
   settingsPage: {
     eyebrow: "Configuration",
@@ -251,6 +253,10 @@ export const en: Dictionary = {
     welcome: "Welcome credits",
     generation: "App generation",
     modification: "App modification",
+    build: "Desktop export",
+    refund_generation: "Generation refund",
+    refund_modification: "Modification refund",
+    refund_build: "Export refund",
     recharge: "Credit top-up",
   },
   editor: {
@@ -292,6 +298,7 @@ export const en: Dictionary = {
         "The app is packaged in Faya-Studio's Tauri 2 runtime with a local SQLite database.",
       sqliteNote: "Windows executable · data stored on the device",
       start: "Build the executable",
+      startCost: "Build the executable · {count} credits",
       starting: "Starting the build…",
       queued: "Waiting for the build worker…",
       building: "Compiling the Windows application…",
@@ -327,8 +334,11 @@ export const en: Dictionary = {
     modifyNotReady: "Generate the app first.",
     modifyInvalid: "Your message is too short.",
     modifyFailed: "Unable to start the modification.",
+    insufficientCredits:
+      "Not enough credits for this action. Top up your balance.",
     requestError: "Action failed",
     composerHint: "Describe the change to apply to the app.",
+    composerCost: "{count} credits per modification",
     versions: "Versions",
     versionsTitle: "Version history",
     versionsDescription:
@@ -603,6 +613,8 @@ export const en: Dictionary = {
     help: "Help & support",
   },
   toasts: {
+    insufficientCredits:
+      "Not enough credits. Top up your balance to continue.",
     proOffer: "The Pro plan will be available soon.",
     proOfferDescription: "This prototype only showcases the interface.",
     organizationSelected: 'Organization "{name}" selected.',

@@ -105,6 +105,7 @@ model BuildJob {
   artifactName String?
   artifactSize Int?
   durationMs   Int?
+  creditTransactionId String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -119,6 +120,7 @@ model GenerationJob {
   status      String   @default("queued")
   kind        String   @default("generate")
   instruction String?
+  creditTransactionId String?
   error       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -145,6 +147,7 @@ model CreditTransaction {
   userId         String?
   amount         Int
   reason         String
+  refId          String?      @unique
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)

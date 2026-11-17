@@ -234,7 +234,11 @@ export function RealCreationStudio({
 
         setRefreshKey((key) => key + 1);
       } else {
-        setPollError(dict.toasts.actionFailed);
+        const message =
+          result.error === "insufficientCredits"
+            ? dict.editor.insufficientCredits
+            : dict.toasts.actionFailed;
+        setPollError(message);
       }
     });
   }
@@ -267,6 +271,8 @@ export function RealCreationStudio({
         setPollError(dict.editor.modifyNotReady);
       } else if (result.error === "invalid") {
         setPollError(dict.editor.modifyInvalid);
+      } else if (result.error === "insufficientCredits") {
+        setPollError(dict.editor.insufficientCredits);
       } else {
         setPollError(dict.editor.modifyFailed);
       }

@@ -1,10 +1,14 @@
 import { spawn } from "node:child_process";
 import { mkdir, open } from "node:fs/promises";
 import path from "node:path";
+import { refundCredits } from "@/engine/credits";
+import { CREDIT_REFUND_REASONS } from "@/lib/credit-costs";
 import { db } from "@/lib/db";
 
 type GenerationJobRecord = {
   id: string;
+  kind: string;
+  creditTransactionId: string | null;
 };
 
 async function spawnGenerationWorker(
@@ -68,6 +72,16 @@ async function spawnGenerationWorker(
           data: { status: "error" },
         })
         .catch(() => undefined);
+
+      if (job.creditTransactionId) {
+        void refundCredits(db, {
+          transactionId: job.creditTransactionId,
+          reason:
+            CREDIT_REFUND_REASONS[
+              job.kind === "modify" ? "modification" : "generation"
+            ],
+        });
+      }
     });
 
     child.unref();
@@ -86,7 +100,10 @@ async function findActiveJob(projectId: string) {
   });
 }
 
-export async function enqueueGeneration(projectId: string) {
+export async function enqueueGeneration(
+  projectId: string,
+  creditTransactionId?: string,
+) {
   const active = await findActiveJob(projectId);
 
   if (active) {
@@ -94,7 +111,12 @@ export async function enqueueGeneration(projectId: string) {
   }
 
   const job = await db.generationJob.create({
-    data: { projectId, status: "queued", kind: "generate" },
+    data: {
+      projectId,
+      status: "queued",
+      kind: "generate",
+      creditTransactionId: creditTransactionId ?? null,
+    },
   });
 
   await db.project.update({
@@ -109,6 +131,7 @@ export async function enqueueGeneration(projectId: string) {
 export async function enqueueModification(
   projectId: string,
   instruction: string,
+  creditTransactionId?: string,
 ) {
   const active = await findActiveJob(projectId);
 
@@ -122,6 +145,7 @@ export async function enqueueModification(
       status: "queued",
       kind: "modify",
       instruction,
+      creditTransactionId: creditTransactionId ?? null,
     },
   });
 

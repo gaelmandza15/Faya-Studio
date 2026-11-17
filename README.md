@@ -169,6 +169,24 @@ dans l'éditeur :
 - Les snapshots et journaux internes (`.faya`) sont exclus des outils de
   l'agent, de l'aperçu HTTP et des assets du build.
 
+## Crédits
+
+Les actions facturables réservent leurs crédits avant de lancer le travail :
+
+- génération : 50 crédits ;
+- modification : 20 crédits ;
+- export desktop : 30 crédits.
+
+`chargeCredits` décrémente le solde et crée une transaction négative dans la
+même transaction SQLite. Le job conserve l'identifiant de la transaction. Si le
+worker échoue ou si le spawn échoue, `refundCredits` crédite le solde et crée
+une transaction de remboursement liée par `refId`, ce qui empêche tout double
+remboursement.
+
+Le solde est vérifié avant le lancement et l'interface affiche le coût au point
+d'action. La page Crédits présente les tarifs et l'historique des débits et
+remboursements.
+
 Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
 tâches dédiée sera nécessaire en production. La synchronisation cloud et le
 multi-utilisateur dans les apps desktop restent à concevoir.
@@ -294,7 +312,7 @@ npm run tauri:proof      # preuve de build Tauri + SQLite
 
 La plateforme couvre l'authentification, les sessions, les organisations, les
 projets, les applications, les crédits, les paramètres, la génération réelle par
-IA et l'export desktop Windows. Restent à brancher : consommation de crédits,
-paiements, e-mails transactionnels, synchronisation cloud, export APK, profil de
-génération SQLite pour les apps exportées et marketplace réelle. Les pages
-`/modeles` et `/aide` restent des pages d'attente.
+IA, les modifications, les versions, la consommation de crédits et l'export
+desktop Windows. Restent à brancher : paiements, e-mails transactionnels,
+synchronisation cloud, export APK et marketplace réelle. Les pages `/modeles` et
+`/aide` restent des pages d'attente.

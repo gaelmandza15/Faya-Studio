@@ -6,6 +6,11 @@ import { getDictionary } from "@/i18n/get-dictionary";
 import { getLocale } from "@/i18n/server";
 import { db } from "@/lib/db";
 import { enqueueGeneration, enqueueModification } from "@/engine/jobs";
+import { chargeCredits, refundCredits } from "@/engine/credits";
+import {
+  CREDIT_COSTS,
+  CREDIT_REFUND_REASONS,
+} from "@/lib/credit-costs";
 import { toProjectIcon } from "@/lib/project-utils";
 import type { ProjectIcon } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -20,7 +25,7 @@ const projectNameSchema = z.string().trim().min(1).max(80);
 
 export type StartProjectResult =
   | { projectId: string }
-  | { error: "invalidPrompt" | "generic" };
+  | { error: "invalidPrompt" | "insufficientCredits" | "generic" };
 
 export type ProjectMutationResult =
   | { ok: true }
@@ -34,6 +39,7 @@ function revalidateProjectViews() {
   revalidatePath("/");
   revalidatePath("/projets");
   revalidatePath("/applications");
+  revalidatePath("/creer");
 }
 
 function deriveProject(
@@ -86,18 +92,44 @@ export async function startProjectAction(input: {
     const dict = getDictionary(locale);
     const derived = deriveProject(parsed.data.prompt, dict);
 
-    const project = await db.project.create({
-      data: {
-        name: parsed.data.name || derived.name,
-        prompt: parsed.data.prompt,
-        icon: toProjectIcon(parsed.data.icon ?? derived.icon),
-        status: "generating",
-        target: "desktop",
-        organizationId: workspace.organization.id,
-        createdById: workspace.user.id,
-        lastActivityAt: new Date(),
-      },
+    const charge = await chargeCredits(db, {
+      organizationId: workspace.organization.id,
+      userId: workspace.user.id,
+      amount: CREDIT_COSTS.generation,
+      reason: "generation",
     });
+
+    if (!charge.ok) {
+      return {
+        error:
+          charge.reason === "insufficient"
+            ? "insufficientCredits"
+            : "generic",
+      };
+    }
+
+    let project;
+
+    try {
+      project = await db.project.create({
+        data: {
+          name: parsed.data.name || derived.name,
+          prompt: parsed.data.prompt,
+          icon: toProjectIcon(parsed.data.icon ?? derived.icon),
+          status: "generating",
+          target: "desktop",
+          organizationId: workspace.organization.id,
+          createdById: workspace.user.id,
+          lastActivityAt: new Date(),
+        },
+      });
+    } catch (error) {
+      await refundCredits(db, {
+        transactionId: charge.transactionId,
+        reason: CREDIT_REFUND_REASONS.generation,
+      });
+      throw error;
+    }
 
     await db.projectMessage
       .create({
@@ -112,9 +144,23 @@ export async function startProjectAction(input: {
       });
 
     try {
-      await enqueueGeneration(project.id);
+      const { reused } = await enqueueGeneration(
+        project.id,
+        charge.transactionId,
+      );
+
+      if (reused) {
+        await refundCredits(db, {
+          transactionId: charge.transactionId,
+          reason: CREDIT_REFUND_REASONS.generation,
+        });
+      }
     } catch (error) {
       console.error("Failed to enqueue generation", error);
+      await refundCredits(db, {
+        transactionId: charge.transactionId,
+        reason: CREDIT_REFUND_REASONS.generation,
+      });
     }
 
     revalidateProjectViews();
@@ -266,18 +312,59 @@ export async function retryGenerationAction(projectId: string) {
       orderBy: { createdAt: "desc" },
     });
 
-    if (latest?.kind === "modify" && latest.instruction) {
-      const { job } = await enqueueModification(
-        projectId,
-        latest.instruction,
-      );
-      revalidateProjectViews();
-      return { ok: true as const, jobId: job.id, kind: "modify" };
+    const isModification =
+      latest?.kind === "modify" && Boolean(latest.instruction);
+    const action = isModification ? "modification" : "generation";
+    const charge = await chargeCredits(db, {
+      organizationId: workspace.organization.id,
+      userId: workspace.user.id,
+      amount: CREDIT_COSTS[action],
+      reason: action,
+    });
+
+    if (!charge.ok) {
+      return {
+        error:
+          charge.reason === "insufficient"
+            ? ("insufficientCredits" as const)
+            : ("generic" as const),
+      };
     }
 
-    const { job } = await enqueueGeneration(projectId);
-    revalidateProjectViews();
-    return { ok: true as const, jobId: job.id, kind: "generate" };
+    try {
+      const enqueued =
+        isModification && latest?.instruction
+          ? await enqueueModification(
+              projectId,
+              latest.instruction,
+              charge.transactionId,
+            )
+          : await enqueueGeneration(
+              projectId,
+              charge.transactionId,
+            );
+
+      if (enqueued.reused) {
+        await refundCredits(db, {
+          transactionId: charge.transactionId,
+          reason: CREDIT_REFUND_REASONS[action],
+        });
+        return { error: "busy" as const };
+      }
+
+      revalidateProjectViews();
+      return {
+        ok: true as const,
+        jobId: enqueued.job.id,
+        kind: isModification ? "modify" : "generate",
+      };
+    } catch (error) {
+      await refundCredits(db, {
+        transactionId: charge.transactionId,
+        reason: CREDIT_REFUND_REASONS[action],
+      });
+      throw error;
+    }
   } catch (error) {
     console.error("Generation retry failed", error);
     return { error: "generic" as const };
