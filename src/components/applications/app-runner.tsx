@@ -37,6 +37,7 @@ export function AppRunner({ project, src }: AppRunnerProps) {
   const [reloadKey, setReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [updatePending, setUpdatePending] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
   const clientId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const reloadTimer = useRef<number | null>(null);
 
@@ -76,6 +77,8 @@ export function AppRunner({ project, src }: AppRunnerProps) {
 
     try {
       eventSource = new EventSource(`/api/projects/${project.id}/events`);
+      eventSource.onopen = () => setSseConnected(true);
+      eventSource.onerror = () => setSseConnected(false);
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -160,7 +163,8 @@ export function AppRunner({ project, src }: AppRunnerProps) {
   return (
     <div
       ref={containerRef}
-      className="flex h-screen w-screen flex-col overflow-hidden bg-[#090e12] text-slate-100"
+      data-sse={sseConnected ? "connected" : "connecting"}
+      className="flex h-dvh w-full flex-col overflow-hidden bg-[#090e12] text-slate-100"
     >
       {/* Runner Topbar */}
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#0c1218] px-3 sm:px-4">

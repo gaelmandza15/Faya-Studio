@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>E2E Runner — Tâches</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside id="sidebar" class="sidebar" aria-label="Navigation de l'application" hidden>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">E</span>
+          <div>
+            <strong>E2E Runner</strong>
+            <span>Tâches</span>
+          </div>
+        </div>
+        <button
+          id="menu-close"
+          class="drawer-close"
+          type="button"
+          aria-label="Fermer le menu"
+        >
+          ×
+        </button>
+        <nav class="nav" aria-label="Navigation principale">
+          <a class="nav-item is-active" href="#tasks">Tâches</a>
+          <a class="nav-item" href="#about">À propos</a>
+        </nav>
+      </aside>
+
+      <button
+        id="drawer-overlay"
+        class="drawer-overlay"
+        type="button"
+        aria-hidden="true"
+        tabindex="-1"
+        hidden
+      ></button>
+
+      <div class="content">
+        <header class="topbar">
+          <button
+            id="menu-toggle"
+            class="icon-button"
+            type="button"
+            aria-label="Ouvrir le menu"
+            aria-expanded="false"
+            aria-controls="sidebar"
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
+
+          <div class="title-block">
+            <h1>E2E Runner</h1>
+            <p>Application de test déterministe</p>
+          </div>
+
+          <div class="topbar-actions">
+            <button
+              id="notifications-toggle"
+              class="icon-button"
+              type="button"
+              aria-label="Notifications"
+              aria-expanded="false"
+              aria-controls="notifications-panel"
+            >
+              <span aria-hidden="true">◔</span>
+              <span id="notification-badge" class="badge">2</span>
+            </button>
+
+            <div
+              id="notifications-panel"
+              class="popover"
+              role="region"
+              aria-label="Notifications"
+              hidden
+            >
+              <div class="popover-header">
+                <strong>Notifications</strong>
+                <button id="mark-read" type="button" class="link-button">
+                  Tout marquer comme lu
+                </button>
+              </div>
+              <ul id="notification-list" class="notification-list">
+                <li data-unread="true">La tâche « Relancer le client » arrive à échéance.</li>
+                <li data-unread="true">Sauvegarde locale terminée.</li>
+              </ul>
+            </div>
+          </div>
+        </header>
+
+        <main id="tasks" class="main">
+          <section class="hero">
+            <div>
+              <p class="eyebrow">Tableau de bord</p>
+              <h2>Vos tâches</h2>
+              <p class="muted">
+                <span id="task-count">0</span> tâche(s) enregistrée(s).
+              </p>
+            </div>
+            <div class="stat">
+              <strong id="done-count">0</strong>
+              <span>terminées</span>
+            </div>
+          </section>
+
+          <form id="task-form" class="task-form">
+            <label for="task-title">Nouvelle tâche</label>
+            <div class="form-row">
+              <input
+                id="task-title"
+                name="title"
+                type="text"
+                placeholder="Ex. Vérifier la facture"
+                autocomplete="off"
+                required
+              />
+              <button type="submit" class="primary">Ajouter</button>
+            </div>
+            <p id="form-error" class="error" role="alert" hidden></p>
+          </form>
+
+          <ul id="task-list" class="task-list" aria-label="Liste des tâches"></ul>
+          <p id="empty-state" class="empty" hidden>
+            Aucune tâche. Ajoutez votre première tâche.
+          </p>
+        </main>
+      </div>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  </body>
+</html>

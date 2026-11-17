@@ -459,6 +459,36 @@ La checklist interactive reste indispensable : l'audit statique ne peut pas
 vérifier qu'un menu se ferme ou qu'un compteur se met à jour. Une validation
 E2E Playwright des applications générées est la prochaine étape naturelle.
 
+## Tests E2E Playwright
+
+Le harnais Playwright vérifie la plateforme et une application fixture
+déterministe, avec une vraie session, le vrai Web Bridge SQLite et le vrai flux
+SSE.
+
+```bash
+npm run e2e           # suite complète
+npm run e2e:headed    # navigateur visible
+npm run e2e:report    # rapport HTML
+```
+
+La suite couvre :
+
+- tableau de bord, liste des applications et bouton « Lancer » ;
+- notifications et drawer mobile de la plateforme ;
+- runner plein écran, pont `__TAURI_INTERNALS__`, CRUD, reload, compteurs ;
+- badge de notifications et tiroir de l'application ;
+- absence de débordement en 390 px ;
+- push desktop → SSE → rafraîchissement automatique ;
+- projet `mobile-chrome` (Pixel 7) : tactile, hauteur `100dvh`, formulaire.
+
+Le setup crée un projet **E2E Runner** isolé, une session et une clé
+d'application, puis nettoie le tout. Pour une plateforme déployée, le mode
+`E2E_REMOTE=1` se connecte réellement via `/login` et cible
+`E2E_BASE_URL`. Détails et limites : [`docs/e2e.md`](docs/e2e.md). Le workflow
+GitHub Actions prêt à l'emploi est dans
+[`docs/ci/e2e-workflow.yml`](docs/ci/e2e-workflow.yml) ; il suffit de le copier
+dans `.github/workflows/e2e.yml` pour l'activer.
+
 ## Export desktop (Tauri 2 + SQLite)
 
 Le bouton **Exporter** de l'éditeur compile l'application générée dans le
@@ -532,6 +562,7 @@ npm run engine:selftest  # auto-test du moteur de génération
 npm run ui:audit -- <id> # audit statique de finition UI d'un workspace
 npm run sync:verify -- <clé>        # sync réelle entre deux appareils
 npm run sync:verify-runtime         # injection du runtime de sync au build
+npm run e2e              # tests Playwright de la plateforme et du runner
 npm run tauri:proof      # preuve de build Tauri + SQLite
 ```
 

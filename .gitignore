@@ -24,6 +24,11 @@
 # generated application workspaces
 /workspaces/
 
+# Playwright
+/.e2e/
+/playwright-report/
+/test-results/
+
 # production
 /build
 

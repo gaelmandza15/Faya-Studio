@@ -74,7 +74,7 @@ export default async function AppRunnerPage({ params }: AppRunnerPageProps) {
 
   if (!ready || !hasFiles) {
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-[#090e12] px-4 text-center text-slate-100">
+      <div className="flex h-dvh w-full flex-col items-center justify-center bg-[#090e12] px-4 text-center text-slate-100">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/10 text-amber-300">
           <Wrench className="h-8 w-8" />
         </div>

@@ -233,6 +233,7 @@ majorité des bugs de finition.
   menu qui ne se ferme pas : cela reste dans la checklist interactive.
 - Les règles sont dans `src/engine/ui-quality.ts` ; `UI_QUALITY_VERSION` permet
   de tracer les évolutions.
-- Une vraie validation E2E (Playwright) sur l'application générée serait la
-  prochaine étape pour transformer certaines vérifications en tests
-  automatiques.
+- Une validation E2E Playwright couvre désormais une partie de ces parcours
+  sur une application fixture déterministe (voir `docs/e2e.md`). Les
+  vérifications métier spécifiques à chaque application restent dans le plan
+  d'acceptation.
