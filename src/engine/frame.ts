@@ -26,6 +26,7 @@ const COMMON = [
   "The app opens from index.html and works offline.",
   "Use the user's language for the interface.",
   "Do not ask the user questions; make reasonable assumptions.",
+  "When a design contract is provided, it is authoritative for colors, typography, spacing, layout, shapes and components.",
 ];
 
 const QUALITY = [
@@ -97,6 +98,7 @@ function bullets(items: string[]): string {
 export function buildSystemPrompt(
   target: GenerationTarget,
   mode: FrameMode,
+  designSystem?: string,
 ): string {
   const frame = getTargetFrame(target);
   const intro =
@@ -109,7 +111,7 @@ export function buildSystemPrompt(
       ? [...frame.contract, ...frame.generationOnly]
       : frame.contract;
 
-  return [
+  const parts = [
     intro,
     "",
     "FRAME",
@@ -120,5 +122,17 @@ export function buildSystemPrompt(
     `RUNTIME: ${frame.label}`,
     frame.runtime,
     bullets(targetRules),
-  ].join("\n");
+  ];
+
+  if (designSystem?.trim()) {
+    parts.push(
+      "",
+      "DESIGN CONTRACT",
+      "Follow this design system for the entire interface. It overrides your own visual preferences.",
+      "",
+      designSystem.trim(),
+    );
+  }
+
+  return parts.join("\n");
 }

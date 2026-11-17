@@ -140,6 +140,7 @@ async function main() {
         ".git",
         "node_modules",
         "desktop-schema.sql",
+        "design.md",
       ]),
     });
 

@@ -183,6 +183,24 @@ assets externes. Le worker de build copie ensuite `desktop-schema.sql` dans le
 template : le shell applique le schéma au démarrage et l'EXE est validé par
 `--self-test`.
 
+## Design system
+
+Toutes les nouvelles applications suivent le contrat de design
+[`design/clean-soft.md`](design/clean-soft.md). Il définit les tokens de
+couleurs, la typographie, les espacements, la structure App Shell, les rayons,
+les ombres et les composants.
+
+- Le contrat complet est injecté dans le prompt de génération.
+- Il est copié en `design.md` dans chaque workspace de projet.
+- Le build exclut `design.md` des assets de l'application.
+- Les projets existants sans `design.md` conservent leur identité visuelle ;
+  le contrat s'applique aux nouvelles générations et aux nouvelles interfaces
+  des projets qui en disposent.
+
+D'autres variantes de design pourront être ajoutées dans `design/`, puis
+exposées comme choix utilisateur. Pour l'instant, Clean Soft est l'unique
+modèle.
+
 ## Export desktop (Tauri 2 + SQLite)
 
 Le bouton **Exporter** de l'éditeur compile l'application générée dans le

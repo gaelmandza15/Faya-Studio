@@ -9,6 +9,10 @@ import {
 import { createWorkspaceTools, validateWorkspace } from "./tools";
 import { listWorkspaceFiles, type WorkspaceFile } from "./workspace";
 import { buildSystemPrompt } from "./frame";
+import {
+  installDesignSystem,
+  readWorkspaceDesignSystem,
+} from "./design";
 import type { GenerationTarget } from "../lib/types";
 
 export type EngineEvent =
@@ -83,6 +87,11 @@ export async function generateApp({
   try {
     emit({ type: "status", status: "starting" });
 
+    const designSystem =
+      mode === "generate"
+        ? await installDesignSystem(workspaceDir)
+        : await readWorkspaceDesignSystem(workspaceDir);
+
     const modelRuntime = await ModelRuntime.create();
     await modelRuntime.setRuntimeApiKey("deepseek", getDeepSeekKey());
 
@@ -102,7 +111,8 @@ export async function generateApp({
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,
       agentDir,
-      systemPromptOverride: () => buildSystemPrompt(target, mode),
+      systemPromptOverride: () =>
+        buildSystemPrompt(target, mode, designSystem),
       appendSystemPromptOverride: () => [],
     });
     await resourceLoader.reload();
