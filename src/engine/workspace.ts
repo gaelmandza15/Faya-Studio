@@ -71,6 +71,12 @@ export function resolveInsideWorkspace(
     throw new Error("Path escapes the workspace.");
   }
 
+  const internal = relative.split(path.sep)[0];
+
+  if (internal === ".faya" || internal === ".build") {
+    throw new Error("Internal workspace paths are not accessible.");
+  }
+
   return resolved;
 }
 
@@ -88,7 +94,14 @@ export async function listWorkspaceFiles(
 
     for (const entry of entries) {
       if (files.length >= MAX_LISTED_FILES) return;
-      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      if (
+        entry.name === "node_modules" ||
+        entry.name === ".git" ||
+        entry.name === ".faya" ||
+        entry.name === ".build"
+      ) {
+        continue;
+      }
 
       const absolute = path.join(directory, entry.name);
 

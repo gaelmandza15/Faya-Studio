@@ -4,11 +4,16 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { createWriteStream } from "node:fs";
-import { copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
 import { getWorkspacesRoot } from "../src/engine/workspace";
+import {
+  clearProjectFiles,
+  createProjectVersion,
+  restoreLatestProjectFiles,
+} from "../src/engine/versions";
 
 const prisma = new PrismaClient();
 
@@ -90,14 +95,6 @@ async function main() {
   const workspaceDir = path.join(getWorkspacesRoot(), projectId);
 
   if (mode === "generate") {
-    await rm(workspaceDir, { recursive: true, force: true });
-  } else if (!(await isFile(path.join(workspaceDir, "index.html")))) {
-    throw new Error(
-      "The application has no generated files to modify. Generate it first.",
-    );
-  }
-
-  if (mode === "generate") {
     const messageCount = await prisma.projectMessage.count({
       where: { projectId },
     });
@@ -133,7 +130,37 @@ async function main() {
       eventsStream.end(() => resolve());
     });
 
+  const restoreAfterFailure = async (): Promise<number | undefined> => {
+    try {
+      return await restoreLatestProjectFiles(prisma, projectId);
+    } catch (error) {
+      console.error("Failed to restore the previous version", error);
+      return undefined;
+    }
+  };
+
   try {
+    if (mode === "generate") {
+      await clearProjectFiles(projectId);
+    } else if (!(await isFile(path.join(workspaceDir, "index.html")))) {
+      throw new Error(
+        "The application has no generated files to modify. Generate it first.",
+      );
+    }
+
+    if (mode === "modify") {
+      const versionCount = await prisma.projectVersion.count({
+        where: { projectId },
+      });
+
+      if (versionCount === 0) {
+        await createProjectVersion(prisma, projectId, {
+          kind: "baseline",
+          summary: "État avant la première modification",
+        });
+      }
+    }
+
     const desktopApp =
       (await isFile(path.join(workspaceDir, "desktop-schema.sql"))) &&
       (await isFile(path.join(workspaceDir, "db.js")));
@@ -179,6 +206,16 @@ async function main() {
     if (result.ok) {
       const summary = result.summary.trim();
 
+      try {
+        await createProjectVersion(prisma, projectId, {
+          kind: mode,
+          jobId,
+          summary: summary || null,
+        });
+      } catch (error) {
+        console.error("Failed to snapshot project version", error);
+      }
+
       if (summary) {
         await prisma.projectMessage
           .create({
@@ -201,9 +238,13 @@ async function main() {
         data: { status: "done", error: null },
       });
     } else {
+      const restored = await restoreAfterFailure();
       await prisma.project.update({
         where: { id: projectId },
-        data: { status: "error", lastActivityAt: new Date() },
+        data: {
+          status: restored ? "ready" : "error",
+          lastActivityAt: new Date(),
+        },
       });
       await prisma.generationJob.update({
         where: { id: jobId },
@@ -229,10 +270,16 @@ async function main() {
     await writeFile(resultPath, JSON.stringify(failure, null, 2), "utf8").catch(
       () => undefined,
     );
+
+    const restored = await restoreAfterFailure();
+
     await prisma.project
       .update({
         where: { id: projectId },
-        data: { status: "error", lastActivityAt: new Date() },
+        data: {
+          status: restored ? "ready" : "error",
+          lastActivityAt: new Date(),
+        },
       })
       .catch(() => undefined);
     await prisma.generationJob

@@ -153,6 +153,22 @@ dans l'éditeur :
 - un échec peut être relancé avec la même instruction via
   `retryGenerationAction`.
 
+## Versions et rollback
+
+- Chaque génération ou modification réussie crée une `ProjectVersion` avec un
+  snapshot complet des fichiers du projet dans
+  `workspaces/<projectId>/.faya/versions/v<n>`.
+- Avant la première modification d'un projet existant, une version de référence
+  (`baseline`) est créée automatiquement.
+- Le bouton **Versions** de l'éditeur liste l'historique, affiche la version
+  courante et permet de restaurer un état antérieur avec confirmation.
+- Une restauration crée elle-même une nouvelle version (`restore`), ce qui
+  conserve un historique linéaire et un point de retour.
+- Si une génération ou une modification échoue, la dernière version valide est
+  restaurée automatiquement et le projet reste exportable.
+- Les snapshots et journaux internes (`.faya`) sont exclus des outils de
+  l'agent, de l'aperçu HTTP et des assets du build.
+
 Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
 tâches dédiée sera nécessaire en production. La synchronisation cloud et le
 multi-utilisateur dans les apps desktop restent à concevoir.

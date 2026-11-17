@@ -6,6 +6,7 @@ import { retryGenerationAction } from "@/app/actions/projects";
 import { sendProjectMessageAction } from "@/app/actions/conversation";
 import { EditorTopbar } from "@/components/editor/editor-topbar";
 import { ExportDialog } from "@/components/editor/export-dialog";
+import { VersionsDialog } from "@/components/editor/versions-dialog";
 import { PreviewPanel } from "@/components/editor/preview-panel";
 import { RealConversationPanel } from "@/components/editor/real-conversation-panel";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -65,6 +66,7 @@ export function RealCreationStudio({
   const [noJob, setNoJob] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [retrying, startRetry] = useTransition();
   const [sending, setSending] = useState(false);
   const isSmallScreen = useMediaQuery("(max-width: 1023px)");
@@ -289,6 +291,7 @@ export function RealCreationStudio({
         onDeviceChange={setDeviceOverride}
         progressLabel={progressLabel}
         onExport={() => setExportOpen(true)}
+        onVersions={() => setVersionsOpen(true)}
       />
 
       <ExportDialog
@@ -296,6 +299,14 @@ export function RealCreationStudio({
         onOpenChange={setExportOpen}
         projectId={projectId}
         projectName={projectName}
+      />
+
+      <VersionsDialog
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        projectId={projectId}
+        projectName={projectName}
+        onRestored={() => window.location.reload()}
       />
 
       <div className="shrink-0 border-b border-white/[0.08] bg-[#0b1116] p-2 lg:hidden">

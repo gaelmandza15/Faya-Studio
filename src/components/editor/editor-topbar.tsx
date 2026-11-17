@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
+  History,
   Loader2,
   Monitor,
   Smartphone,
@@ -26,6 +27,7 @@ export function EditorTopbar({
   onDeviceChange,
   progressLabel,
   onExport,
+  onVersions,
 }: {
   projectName: string;
   status: GenerationStatus;
@@ -35,6 +37,7 @@ export function EditorTopbar({
   onDeviceChange: (device: PreviewDevice) => void;
   progressLabel?: string;
   onExport?: () => void;
+  onVersions?: () => void;
 }) {
   const { locale, dict } = useI18n();
   const totalSteps = getDemoData(locale).generation.steps.length;
@@ -176,6 +179,17 @@ export function EditorTopbar({
             <Smartphone className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {onVersions && (
+          <button
+            type="button"
+            onClick={onVersions}
+            className="hidden items-center gap-1.5 rounded-lg border border-white/15 bg-[#141d24] px-3 py-2 text-[12px] font-medium text-slate-200 transition hover:bg-[#1a242d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] sm:flex"
+          >
+            <History className="h-3.5 w-3.5" />
+            {dict.editor.versions}
+          </button>
+        )}
 
         <button
           type="button"

@@ -341,6 +341,30 @@ export const fr = {
     requestError: "Action impossible",
     composerHint:
       "Décrivez la modification à apporter à l'application.",
+    versions: "Versions",
+    versionsTitle: "Historique des versions",
+    versionsDescription:
+      "Chaque génération ou modification crée une version. Restaurez un état antérieur sans perdre l'historique.",
+    versionsEmpty: "Aucune version pour le moment.",
+    versionsLoading: "Chargement…",
+    versionsError: "Impossible de charger les versions.",
+    versionLabel: "Version {number}",
+    versionCurrent: "Version actuelle",
+    versionRestore: "Restaurer",
+    versionRestoreConfirm: "Confirmer",
+    versionRestoreCancel: "Annuler",
+    versionRestoring: "Restauration…",
+    versionRestoreFailed: "La restauration a échoué.",
+    versionRestoreBusy:
+      "Attendez la fin de la génération ou du build en cours.",
+    versionFiles: "{count} fichiers",
+    versionClose: "Fermer",
+    versionKinds: {
+      generate: "Génération",
+      modify: "Modification",
+      baseline: "État initial",
+      restore: "Restauration",
+    },
     errorTitle: "La génération a échoué",
     errorHint: "Vous pouvez relancer la génération pour réessayer.",
     tools: {

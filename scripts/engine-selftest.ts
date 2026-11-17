@@ -235,6 +235,14 @@ async function main() {
     }
     check("une tentative de sortie du workspace est refusée", escaped);
 
+    let internalBlocked = false;
+    try {
+      resolveInsideWorkspace(workspace.dir, ".faya/events.jsonl");
+    } catch {
+      internalBlocked = true;
+    }
+    check("les chemins internes .faya sont bloqués", internalBlocked);
+
     await writeFile(
       path.join(workspace.dir, "bad.js"),
       "const = ;",

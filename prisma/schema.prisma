@@ -76,8 +76,24 @@ model Project {
   jobs           GenerationJob[]
   builds         BuildJob[]
   messages       ProjectMessage[]
+  versions       ProjectVersion[]
 
   @@index([organizationId, lastActivityAt])
+}
+
+model ProjectVersion {
+  id        String   @id @default(cuid())
+  projectId String
+  number    Int
+  kind      String   @default("generate")
+  jobId     String?
+  summary   String?
+  fileCount Int      @default(0)
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, number])
+  @@index([projectId, createdAt])
 }
 
 model BuildJob {
