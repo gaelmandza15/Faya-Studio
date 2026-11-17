@@ -7,6 +7,7 @@ import {
   writeWorkspaceFile,
 } from "../src/engine/workspace";
 import { validateWorkspace } from "../src/engine/tools";
+import { buildSystemPrompt } from "../src/engine/frame";
 
 const VALID_HTML = `<!DOCTYPE html>
 <html lang="fr">
@@ -281,6 +282,29 @@ async function main() {
       "un asset externe est refusé",
       !externalAsset.ok &&
         externalAsset.report.includes("External asset is not allowed"),
+    );
+
+    await writeFile(
+      path.join(workspace.dir, "index.html"),
+      `<!DOCTYPE html><html><head><title>UI</title></head><body>
+        <button><svg></svg></button>
+        <div id="notification-panel"></div>
+        <div id="notification-panel"></div>
+      </body></html>`,
+      "utf8",
+    );
+    const uiCheck = await validateWorkspace(workspace.dir);
+    check(
+      "les bugs de finition UI sont signalés par run_checks",
+      uiCheck.report.includes("UI QUALITY [blocker] duplicate-id") &&
+        uiCheck.report.includes("UI QUALITY [major] icon-button-name"),
+    );
+
+    const prompt = buildSystemPrompt("desktop", "generate");
+    check(
+      "la checklist de finition UI est injectée dans le prompt",
+      prompt.includes("FINAL UI QUALITY PASS") &&
+        prompt.includes("The badge count is derived from unread items"),
     );
 
     console.log(

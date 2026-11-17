@@ -24,7 +24,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   {
     params,
   }: {
@@ -57,22 +57,74 @@ export async function GET(
       absolute = resolveInsideWorkspace(root, `${relative}/index.html`);
     }
 
-    const body = await readFile(absolute);
+    let body = await readFile(absolute);
     const extension = path.extname(absolute).toLowerCase();
     const contentType =
       CONTENT_TYPES[extension] ?? "application/octet-stream";
 
     const headers: Record<string, string> = {
       "Content-Type": contentType,
-      "Content-Length": String(body.byteLength),
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
     };
 
     if (extension === ".html") {
-      headers["Content-Security-Policy"] =
-        "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+      let html = body.toString("utf8");
+
+      // Inject the Faya Platform Web Bridge before other scripts
+      const bridgeScript = `<script>
+(function() {
+  if (typeof window.__TAURI_INTERNALS__ !== 'undefined' &&
+      typeof window.__TAURI_INTERNALS__.invoke === 'function') return;
+  const PROJECT_ID = ${JSON.stringify(id)};
+  const CLIENT_ID = new URLSearchParams(window.location.search).get('_client') || 'web';
+  const invoke = async function(cmd, args) {
+    if (cmd !== 'db_select' && cmd !== 'db_execute') {
+      throw new Error('Commande non supportée sur le Web Bridge : ' + cmd);
     }
+    const res = await fetch('/api/projects/' + PROJECT_ID + '/db', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Faya-Client': CLIENT_ID
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        cmd: cmd,
+        query: args && args.query,
+        params: (args && args.params) || []
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(function() { return { error: 'Erreur SQL' }; });
+      throw new Error(err.error || ('Erreur HTTP ' + res.status));
+    }
+    const data = await res.json();
+    return data.result;
+  };
+  // Generated apps use either __TAURI__ or __TAURI_INTERNALS__.
+  window.__TAURI__ = { core: { invoke: invoke } };
+  window.__TAURI_INTERNALS__ = { invoke: invoke };
+})();
+</script>`;
+
+      if (/<head(\s[^>]*)?>/i.test(html)) {
+        html = html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n${bridgeScript}`);
+      } else {
+        html = `${bridgeScript}\n${html}`;
+      }
+
+      body = Buffer.from(html, "utf8");
+
+      // The app may only reach its own data endpoint. Keeping connect-src
+      // narrower than 'self' stops generated code from calling other
+      // platform APIs with the user's session.
+      const origin = new URL(request.url).origin;
+      headers["Content-Security-Policy"] =
+        `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src ${origin}/api/projects/${id}/db; form-action 'none'; base-uri 'none'`;
+    }
+
+    headers["Content-Length"] = String(body.byteLength);
 
     return new Response(body, { headers });
   } catch {

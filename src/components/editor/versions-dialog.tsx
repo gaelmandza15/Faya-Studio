@@ -30,12 +30,14 @@ export function VersionsDialog({
   onOpenChange,
   projectId,
   projectName,
+  canRestore,
   onRestored,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+  canRestore: boolean;
   onRestored: () => void;
 }) {
   const { locale, dict } = useI18n();
@@ -258,41 +260,43 @@ export function VersionsDialog({
                       </div>
                     </div>
 
-                    <div className="mt-2.5 flex justify-end gap-2">
-                      {isConfirming ? (
-                        <>
+                    {canRestore && (
+                      <div className="mt-2.5 flex justify-end gap-2">
+                        {isConfirming ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmId(null)}
+                              disabled={isRestoring}
+                              className="rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-slate-400 transition hover:bg-white/5"
+                            >
+                              {labels.versionRestoreCancel}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void restore(version)}
+                              disabled={isRestoring}
+                              className="flex items-center gap-1.5 rounded-lg bg-red-500/90 px-2.5 py-1 text-[10.5px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-60"
+                            >
+                              {isRestoring && (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              )}
+                              {labels.versionRestoreConfirm}
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => setConfirmId(null)}
-                            disabled={isRestoring}
-                            className="rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-slate-400 transition hover:bg-white/5"
+                            onClick={() => setConfirmId(version.id)}
+                            disabled={Boolean(restoringId)}
+                            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-50"
                           >
-                            {labels.versionRestoreCancel}
+                            <RotateCcw className="h-3 w-3" />
+                            {labels.versionRestore}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void restore(version)}
-                            disabled={isRestoring}
-                            className="flex items-center gap-1.5 rounded-lg bg-red-500/90 px-2.5 py-1 text-[10.5px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-60"
-                          >
-                            {isRestoring && (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            )}
-                            {labels.versionRestoreConfirm}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmId(version.id)}
-                          disabled={Boolean(restoringId)}
-                          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-50"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          {labels.versionRestore}
-                        </button>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </li>
                 );
               })}

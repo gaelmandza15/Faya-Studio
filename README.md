@@ -59,7 +59,7 @@ demo@faya-studio.app / demo1234
 | `/creer` | Éditeur de création et aperçu |
 | `/projets` | Liste réelle des projets, recherche, création, renommage, duplication, suppression |
 | `/applications` | Liste réelle des applications |
-| `/applications/[id]` | Fiche application (statut, description, dates, sections à venir) |
+| `/applications/[id]` | Fiche application : versions, exports, publication, crédits, lien plateforme, appareils et connexions |
 | `/credits` | Solde réel, consommation du mois et historique des transactions |
 | `/parametres` | Profil, organisation, membres et langue |
 | `/modeles` | Page d'attente « Modèles d'applications » |
@@ -77,6 +77,8 @@ SQLite + Prisma (`prisma/schema.prisma`). Le modèle couvre :
 - `Project` (nom, prompt, icône, statut, organisation, dernière activité) ;
 - `GenerationJob` (statut des générations Pi/DeepSeek) ;
 - `BuildJob` (statut des exports Tauri, artefacts et durées de build) ;
+- `SyncRecord` / `SyncDevice` (journal de synchronisation et appareils liés) ;
+- `WebhookEndpoint` / `WebhookDelivery` (connexions externes signées) ;
 - `CreditTransaction` (historique des crédits).
 
 Commandes utiles :
@@ -153,6 +155,28 @@ dans l'éditeur :
 - un échec peut être relancé avec la même instruction via
   `retryGenerationAction`.
 
+## Rôles, équipe et invitations
+
+Quatre rôles sont appliqués côté serveur :
+
+| Rôle | Capacités |
+| --- | --- |
+| `owner` | Tout, y compris les membres et l'organisation |
+| `admin` | Projets, générations, builds, publications, versions, membres et organisation |
+| `editor` | Création et modification d'apps, générations, builds, publications, restaurations |
+| `viewer` | Lecture seule |
+
+La matrice est définie dans `src/lib/roles.ts` et vérifiée dans toutes les
+actions sensibles. L'interface masque ou désactive les actions interdites.
+
+Les invitations sont générées depuis **Paramètres → Membres** sous forme de
+lien valable 7 jours. L'invité peut se connecter ou créer un compte, puis
+rejoint l'organisation avec le rôle prévu. Le propriétaire peut changer les
+rôles et retirer des membres ; le rôle `owner` n'est pas modifiable et le
+dernier propriétaire ne peut pas être retiré. Les liens d'invitation sont
+affichés dans l'interface et copiés manuellement (aucun e-mail transactionnel
+n'est encore envoyé).
+
 ## Versions et rollback
 
 - Chaque génération ou modification réussie crée une `ProjectVersion` avec un
@@ -188,8 +212,178 @@ d'action. La page Crédits présente les tarifs et l'historique des débits et
 remboursements.
 
 Limites actuelles : le worker détaché utilise `tsx` en local ; une file de
-tâches dédiée sera nécessaire en production. La synchronisation cloud et le
-multi-utilisateur dans les apps desktop restent à concevoir.
+tâches dédiée sera nécessaire en production. La synchronisation cloud des apps
+desktop existe (voir plus bas), mais la gestion multi-utilisateur et les
+permissions à l'intérieur de l'application restent à concevoir.
+
+## Publication web
+
+Le bouton **Publier** de l'éditeur rend l'application accessible sans compte :
+
+- l'utilisateur choisit un slug (`/p/<slug>`) ;
+- les fichiers de la version courante sont copiés dans
+  `workspaces/.publications/<slug>` ;
+- un enregistrement `Publication` conserve le slug, la version publiée et les
+  dates ;
+- la route publique `/p/<slug>` sert le HTML, les assets et injecte un
+  `<base>` pour que les chemins relatifs fonctionnent ;
+- **Republier** met à jour le slug et publie la version courante ;
+- **Dépublier** supprime l'enregistrement et les fichiers publics.
+
+Les visiteurs n'ont pas besoin d'être connectés. Les données de l'application
+publiée restent locales au navigateur de chaque visiteur, comme dans l'aperçu.
+
+## Fiche application
+
+La fiche `/applications/[id]` relie l'application à toute la plateforme :
+
+- versions récentes avec la version courante ;
+- exports desktop, leur statut, leur version, leur taille et leur durée ;
+- téléchargement direct de chaque EXE réussi ;
+- publication web et lien public ;
+- crédits consommés par les générations, modifications et builds ;
+- créateur, organisation, nombre de membres, cible et identifiant.
+
+`BuildJob.versionNumber` enregistre la version de l'application au moment du
+build, ce qui permet de relier un exécutable à une version précise du projet.
+
+## Mode Exécution et Web Bridge
+
+Une application prête s'ouvre directement dans le navigateur, sans passer par
+le studio :
+
+- route plein écran `/app/[id]`, protégée par session et appartenance à
+  l'organisation ;
+- bandeau discret : retour à la fiche, nom, statut, « Données partagées »,
+  mode desktop, actualisation, plein écran, nouvel onglet, « Modifier avec
+  l'IA » ;
+- bouton **Lancer l'application** sur la fiche, la liste des applications, le
+  tableau de bord et le menu contextuel des projets.
+
+Les données ne sont plus dans le `localStorage` du navigateur. La plateforme
+maintient une base SQLite par projet dans
+`workspaces/<id>/.faya/app.db`, initialisée depuis `desktop-schema.sql` :
+
+- `GET /api/workspaces/[id]/[...path]` sert l'application et injecte un pont
+  qui définit `window.__TAURI__` **et** `window.__TAURI_INTERNALS__` ;
+- `POST /api/projects/[id]/db` exécute `db_select` / `db_execute` pour les
+  membres de l'organisation ;
+- le code généré reste inchangé : il appelle `invoke("db_select", …)` comme
+  sous Tauri ;
+- un viewer peut lire, pas écrire ; les écritures exigent `project.update` ;
+- le SQL est confiné : une seule instruction, pas de `ATTACH`, `PRAGMA`,
+  DDL, `VACUUM` ni écriture déguisée via `db_select` ;
+- la CSP de l'application limite `connect-src` à son propre endpoint de
+  données ;
+- l'endpoint est limité à **180 requêtes/minute par utilisateur** (HTTP 429 +
+  `Retry-After`) ;
+- un flux SSE `/api/projects/[id]/events` rafraîchit automatiquement l'iframe
+  après un `push` desktop ou une écriture d'un autre onglet web (anti-rebond,
+  pas de rechargement pour sa propre écriture).
+
+Le schéma est resynchronisé quand `desktop-schema.sql` change : nouvelles
+tables via `CREATE TABLE IF NOT EXISTS`, nouvelles colonnes via `ALTER TABLE
+ADD COLUMN` lorsque la définition le permet.
+
+### Réconciliation avec le desktop
+
+Le pont web et le moteur de synchronisation partagent le même flux :
+
+- une écriture web (`db_execute`) est comparée avant/après sur sa table, puis
+  les lignes créées/modifiées/supprimées sont enregistrées dans `SyncRecord`
+  avec `deviceId = "web"` ;
+- un `push` desktop accepté est appliqué à la base SQLite web du projet ;
+- un desktop qui tire les changements reçoit donc les saisies faites dans le
+  navigateur, et inversement.
+
+Limites actuelles : une seule instance de plateforme (SQLite local et
+registre SSE/rate-limit en mémoire, pas de stockage partagé multi-serveurs),
+applications générées qui utilisent d'autres API Tauri que `invoke` non prises
+en charge, et isolation same-origin de l'iframe à renforcer pour une exposition
+publique.
+
+## Applications liées et synchronisation
+
+Chaque application choisit explicitement son mode :
+
+- **locale** : l'EXE contient ses données SQLite et ne contacte jamais la
+  plateforme ;
+- **synchronisée** : l'EXE continue de fonctionner hors ligne dans sa base
+  SQLite locale, puis réplique ses changements avec la plateforme et les
+  autres appareils dès que le réseau revient.
+
+Le mode se règle sur la fiche application, dans **Lien avec la plateforme**.
+L'activation génère une **clé d'application** (`fs_…`), embarquée dans les
+exports suivants. La rotation de la clé déconnecte immédiatement tous les
+appareils déjà exportés.
+
+### Protocole
+
+- `POST /api/sync/handshake` : authentifie l'application et enregistre
+  l'appareil ;
+- `POST /api/sync/push` : envoie les lignes créées, modifiées ou supprimées ;
+- `POST /api/sync/pull` : récupère les changements depuis un curseur.
+
+L'authentification utilise `Authorization: Bearer <clé d'application>`.
+Chaque ligne est identifiée par la clé primaire de sa table ; la résolution de
+conflit est **dernier écrivain gagnant**, avec renvoi de la version serveur en
+cas de conflit. Les suppressions sont des tombstones.
+
+Côté EXE, `templates/faya-runtime/faya-sync.js` :
+
+- découvre les tables SQLite et leurs colonnes via `PRAGMA table_info` ;
+- détecte les changements locaux avec une table miroir `_faya_sync_rows`,
+  sans modifier le code de persistance de l'application générée ;
+- applique les changements distants et met à jour le miroir ;
+- fonctionne hors ligne et reprend au retour du réseau ;
+- affiche une pastille discrète de statut et expose `window.FayaSync`
+  (`syncNow`, `getStatus`, `onChange`, `emit`).
+
+Variables utiles : `FAYA_PLATFORM_URL` (URL publique de la plateforme gravée
+dans les exports) ; à défaut `NEXT_PUBLIC_APP_URL`, puis
+`http://localhost:3000`.
+
+### Vérification
+
+```bash
+npm run sync:verify -- fs_...        # deux appareils + conflits + tombstones
+npm run sync:verify-runtime          # injection de la config au build
+```
+
+`sync:verify` utilise la vraie API et le vrai moteur embarqué, avec deux bases
+SQLite temporaires. Il nécessite un serveur de développement actif et une clé
+d'application valide.
+
+### Limites connues
+
+- Pas encore d'auto-update signé des EXE synchronisés ; la publication
+  `/p/[slug]` reste une copie figée, distincte du mode Exécution connecté.
+- Conflits résolus par ligne, pas par champ.
+- Les tables sans clé primaire exploitable sont ignorées.
+- L'application locale ne demande pas de compte ; les rôles de la plateforme
+  protègent la fiche, la clé et les connexions, pas l'usage de l'EXE.
+- La clé d'application est stockée en clair pour pouvoir être embarquée dans
+  les builds : chiffrement au repos et limitation de débit restent à ajouter
+  avant une exposition publique à grande échelle.
+
+## Connexions externes
+
+La fiche application propose des **webhooks universels signés** : ils couvrent
+n8n, Make, Zapier, Slack ou une API interne sans intégrer chaque fournisseur.
+
+- L'EXE appelle `POST /api/hooks/events` avec sa clé d'application via
+  `FayaSync.emit("facture.validee", { id: 42 })`.
+- La plateforme relaie l'événement à chaque endpoint activé.
+- Chaque requête porte `X-Faya-Event`, `X-Faya-Delivery`,
+  `X-Faya-Timestamp` et `X-Faya-Signature: sha256=<hmac>`.
+- La signature HMAC-SHA256 couvre `timestamp.body` avec le secret de
+  l'endpoint.
+- Chaque livraison est journalisée (`WebhookDelivery`) avec le code HTTP et
+  l'erreur éventuelle ; l'UI affiche le dernier statut.
+
+Limite actuelle : 10 endpoints par application, envoi immédiat sans retry
+automatique. Les webhooks entrants (outil externe → application) restent à
+concevoir.
 
 ## Profil de génération desktop
 
@@ -234,6 +428,36 @@ les ombres et les composants.
 D'autres variantes de design pourront être ajoutées dans `design/`, puis
 exposées comme choix utilisateur. Pour l'instant, Clean Soft est l'unique
 modèle.
+
+## Qualité UI et finitions
+
+En plus du design system, chaque génération et modification se termine par une
+**passe de finition UI** obligatoire. Le catalogue complet est dans
+[`docs/ui-quality.md`](docs/ui-quality.md) et dans
+`src/engine/ui-quality.ts`.
+
+Il couvre les bugs subtils qui passent les tests fonctionnels mais agacent
+immédiatement : badge de notifications qui ne se vide pas, drawer qui laisse la
+page défiler, menu qui double-bascule, dialogue qui perd le focus, compteurs
+désynchronisés de la liste, filtres qui gardent des lignes périmées, actions de
+ligne qui visent la mauvaise ligne, débordements en 360 px, focus invisible,
+textes de remplissage oubliés.
+
+- La checklist est injectée dans le prompt système en mode `generate` et
+  `modify`.
+- `run_checks` ajoute un audit statique : IDs dupliqués, références ARIA
+  cassées, boutons icône sans nom, `<button>` sans `type` dans un formulaire,
+  images sans `alt`, `href="#"`, `onclick` vide, `outline: none` sans
+  `:focus-visible`, textes de remplissage.
+- Audit d'un workspace existant :
+
+```bash
+npm run ui:audit -- <workspace-id> [autre-id...]
+```
+
+La checklist interactive reste indispensable : l'audit statique ne peut pas
+vérifier qu'un menu se ferme ou qu'un compteur se met à jour. Une validation
+E2E Playwright des applications générées est la prochaine étape naturelle.
 
 ## Export desktop (Tauri 2 + SQLite)
 
@@ -305,14 +529,20 @@ npm run start            # serveur de production
 npm run lint             # ESLint
 npx tsc --noEmit         # vérification TypeScript
 npm run engine:selftest  # auto-test du moteur de génération
+npm run ui:audit -- <id> # audit statique de finition UI d'un workspace
+npm run sync:verify -- <clé>        # sync réelle entre deux appareils
+npm run sync:verify-runtime         # injection du runtime de sync au build
 npm run tauri:proof      # preuve de build Tauri + SQLite
 ```
 
 ## Périmètre
 
 La plateforme couvre l'authentification, les sessions, les organisations, les
-projets, les applications, les crédits, les paramètres, la génération réelle par
-IA, les modifications, les versions, la consommation de crédits et l'export
-desktop Windows. Restent à brancher : paiements, e-mails transactionnels,
-synchronisation cloud, export APK et marketplace réelle. Les pages `/modeles` et
-`/aide` restent des pages d'attente.
+projets, les applications, les crédits, les paramètres, les rôles et
+invitations d'équipe, la génération réelle par IA, les modifications, les
+versions, la consommation de crédits, l'export desktop Windows, la publication
+web, l'exécution connectée dans le navigateur, la synchronisation des
+applications desktop et les webhooks externes.
+Restent à brancher : paiements, e-mails transactionnels, mises à jour
+automatiques des EXE, webhooks entrants, export APK et marketplace réelle. Les
+pages `/modeles` et `/aide` restent des pages d'attente.

@@ -9,11 +9,12 @@ import {
   restoreProjectFiles,
 } from "@/engine/versions";
 import { db } from "@/lib/db";
+import { can } from "@/lib/roles";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 export type RestoreProjectVersionResult =
   | { ok: true; versionNumber: number }
-  | { error: "notFound" | "busy" | "generic" };
+  | { error: "notFound" | "busy" | "forbidden" | "generic" };
 
 export async function restoreProjectVersionAction(
   projectId: string,
@@ -21,6 +22,10 @@ export async function restoreProjectVersionAction(
 ): Promise<RestoreProjectVersionResult> {
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "version.restore")) {
+      return { error: "forbidden" };
+    }
 
     const project = await db.project.findFirst({
       where: {

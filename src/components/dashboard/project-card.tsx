@@ -9,6 +9,7 @@ import {
   Loader2,
   MoreVertical,
   PencilLine,
+  Play,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useI18n } from "@/i18n/provider";
+import { useWorkspace } from "@/components/shell/workspace-provider";
+import { can } from "@/lib/roles";
 import type { Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +42,15 @@ export function ProjectCard({
 }) {
   const router = useRouter();
   const { dict } = useI18n();
+  const workspace = useWorkspace();
+  const canManage = can(
+    workspace.organization.role,
+    "project.update",
+  );
+  const canDelete = can(
+    workspace.organization.role,
+    "project.delete",
+  );
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(project.name);
@@ -140,25 +152,55 @@ export function ProjectCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <Link
-            href={href}
-            className="rounded-lg border border-white/15 bg-[#1a242d] px-2.5 py-1 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#22303c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
-          >
-            {dict.common.open}
-          </Link>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {project.status === "ready" ? (
+            <>
+              <Link
+                href={`/app/${project.id}`}
+                className="flex items-center gap-1 rounded-lg bg-[#1be67a] px-2.5 py-1 text-[11.5px] font-semibold text-slate-950 shadow-[0_0_10px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+              >
+                <Play className="h-3 w-3 fill-slate-950" />
+                {dict.applicationsPage.launch}
+              </Link>
+              <Link
+                href={href}
+                className="rounded-lg border border-white/15 bg-[#1a242d] px-2 py-1 text-[11.5px] font-medium text-slate-300 transition hover:bg-[#22303c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+                title={dict.applicationsPage.openInEditor}
+              >
+                {dict.common.open}
+              </Link>
+            </>
+          ) : (
+            <Link
+              href={href}
+              className="rounded-lg border border-white/15 bg-[#1a242d] px-2.5 py-1 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#22303c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+            >
+              {dict.common.open}
+            </Link>
+          )}
 
           <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={optionsLabel}
-              className="hidden rounded-md p-0.5 text-slate-400 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] sm:block"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </DropdownMenuTrigger>
+            {canManage && (
+              <DropdownMenuTrigger
+                aria-label={optionsLabel}
+                className="hidden rounded-md p-0.5 text-slate-400 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] sm:block"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </DropdownMenuTrigger>
+            )}
             <DropdownMenuContent
               align="end"
               className="w-48 border border-white/10 bg-[#0e151b] p-1 text-slate-200 shadow-2xl"
             >
+              {project.status === "ready" && (
+                <DropdownMenuItem
+                  onClick={() => router.push(`/app/${project.id}`)}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-[#1be67a] hover:text-[#1be67a]"
+                >
+                  <Play className="h-4 w-4 fill-[#1be67a]" />
+                  {dict.applicationsPage.launchApp}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => router.push(href)}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm"
@@ -180,15 +222,19 @@ export function ProjectCard({
                 <Copy className="h-4 w-4 text-slate-400" />
                 {dict.projectMenu.duplicate}
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => setDeleteOpen(true)}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm"
-              >
-                <Trash2 className="h-4 w-4" />
-                {dict.projectMenu.delete}
-              </DropdownMenuItem>
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setDeleteOpen(true)}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {dict.projectMenu.delete}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

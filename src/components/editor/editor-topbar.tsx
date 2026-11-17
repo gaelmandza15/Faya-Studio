@@ -28,6 +28,9 @@ export function EditorTopbar({
   progressLabel,
   onExport,
   onVersions,
+  onPublish,
+  canExport = true,
+  canPublish = true,
 }: {
   projectName: string;
   status: GenerationStatus;
@@ -38,6 +41,9 @@ export function EditorTopbar({
   progressLabel?: string;
   onExport?: () => void;
   onVersions?: () => void;
+  onPublish?: () => void;
+  canExport?: boolean;
+  canPublish?: boolean;
 }) {
   const { locale, dict } = useI18n();
   const totalSteps = getDemoData(locale).generation.steps.length;
@@ -78,6 +84,12 @@ export function EditorTopbar({
       });
       return;
     }
+
+    if (onPublish) {
+      onPublish();
+      return;
+    }
+
     toast(dict.editor.publishComingSoon);
   }
 
@@ -191,23 +203,27 @@ export function EditorTopbar({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={handleExport}
-          className="hidden items-center gap-1.5 rounded-lg border border-white/15 bg-[#141d24] px-3 py-2 text-[12px] font-medium text-slate-200 transition hover:bg-[#1a242d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] sm:flex"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {dict.editor.export}
-        </button>
+        {canExport && (
+          <button
+            type="button"
+            onClick={handleExport}
+            className="hidden items-center gap-1.5 rounded-lg border border-white/15 bg-[#141d24] px-3 py-2 text-[12px] font-medium text-slate-200 transition hover:bg-[#1a242d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] sm:flex"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {dict.editor.export}
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={handlePublish}
-          className="flex items-center gap-1.5 rounded-lg bg-[#1be67a] px-3 py-2 text-[12px] font-semibold text-slate-950 shadow-[0_0_14px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
-        >
-          <Upload className="h-3.5 w-3.5" />
-          {dict.editor.publish}
-        </button>
+        {canPublish && (
+          <button
+            type="button"
+            onClick={handlePublish}
+            className="flex items-center gap-1.5 rounded-lg bg-[#1be67a] px-3 py-2 text-[12px] font-semibold text-slate-950 shadow-[0_0_14px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {dict.editor.publish}
+          </button>
+        )}
       </div>
     </header>
   );

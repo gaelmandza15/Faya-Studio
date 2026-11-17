@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { can } from "@/lib/roles";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 const profileSchema = z.object({
@@ -60,19 +61,7 @@ export async function updateOrganizationAction(
   try {
     const workspace = await getWorkspaceContext();
 
-    const membership = await db.membership.findUnique({
-      where: {
-        userId_organizationId: {
-          userId: workspace.user.id,
-          organizationId: workspace.organization.id,
-        },
-      },
-    });
-
-    if (
-      !membership ||
-      (membership.role !== "owner" && membership.role !== "admin")
-    ) {
+    if (!can(workspace.organization.role, "organization.manage")) {
       return { error: "forbidden" };
     }
 

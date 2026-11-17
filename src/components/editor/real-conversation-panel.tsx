@@ -58,6 +58,7 @@ export function RealConversationPanel({
   onSend,
   retrying,
   sending,
+  canEdit,
 }: {
   projectPrompt: string;
   messages: ProjectMessageView[];
@@ -72,6 +73,7 @@ export function RealConversationPanel({
   onSend: (message: string) => Promise<boolean>;
   retrying: boolean;
   sending: boolean;
+  canEdit: boolean;
 }) {
   const { dict } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -135,7 +137,7 @@ export function RealConversationPanel({
       )
     : undefined;
   const showLive = status === "running" || !currentAgentMessage;
-  const canCompose = previewReady && status === "done";
+  const canCompose = canEdit && previewReady && status === "done";
   const agentStatus =
     status === "error"
       ? dict.editor.failed
@@ -143,9 +145,10 @@ export function RealConversationPanel({
         ? dict.editor.agentWorking
         : dict.editor.agentAvailable;
   const canRetry =
-    status === "error" ||
-    noJob ||
-    (status === "done" && !previewReady);
+    canEdit &&
+    (status === "error" ||
+      noJob ||
+      (status === "done" && !previewReady));
 
   async function submit() {
     const value = draft.trim();
@@ -340,7 +343,9 @@ export function RealConversationPanel({
           <div className="rounded-xl border border-white/[0.06] bg-[#11191f] px-3 py-2.5 text-[11px] leading-relaxed text-slate-500">
             {status === "running"
               ? dict.editor.composerBusy
-              : dict.editor.previewNotReady}
+              : !canEdit
+                ? dict.common.readOnlyRole
+                : dict.editor.previewNotReady}
           </div>
         )}
       </div>

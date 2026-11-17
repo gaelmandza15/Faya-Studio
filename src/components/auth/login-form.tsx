@@ -9,7 +9,7 @@ import { useI18n } from "@/i18n/provider";
 
 const initialState: AuthState = {};
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const { dict } = useI18n();
   const [state, formAction, isPending] = useActionState(
     loginAction,
@@ -43,6 +43,8 @@ export function LoginForm() {
             {error}
           </div>
         )}
+
+        {next && <input type="hidden" name="next" value={next} />}
 
         <FormField
           label={dict.auth.email}
@@ -88,7 +90,7 @@ export function LoginForm() {
       <p className="mt-6 text-center text-[12.5px] text-slate-400">
         {dict.auth.noAccount}{" "}
         <Link
-          href="/register"
+          href={next ? `/register?next=${encodeURIComponent(next)}` : "/register"}
           className="font-medium text-[#1be67a] transition hover:underline"
         >
           {dict.auth.goToRegister}

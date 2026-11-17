@@ -36,6 +36,7 @@ export default async function ParametresPage() {
       organization={workspace.organization}
       members={members}
       currentRole={currentMembership?.role ?? "member"}
+      currentUserId={workspace.user.id}
     />
   );
 }

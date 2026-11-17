@@ -9,6 +9,7 @@ import {
   CREDIT_COSTS,
   CREDIT_REFUND_REASONS,
 } from "@/lib/credit-costs";
+import { can } from "@/lib/roles";
 
 export type ExportProjectResult =
   | { jobId: string }
@@ -18,6 +19,7 @@ export type ExportProjectResult =
         | "notReady"
         | "busy"
         | "insufficientCredits"
+        | "forbidden"
         | "generic";
     };
 
@@ -26,6 +28,10 @@ export async function exportProjectAction(
 ): Promise<ExportProjectResult> {
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "build.run")) {
+      return { error: "forbidden" };
+    }
 
     const project = await db.project.findFirst({
       where: {

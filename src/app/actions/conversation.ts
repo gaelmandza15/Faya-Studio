@@ -12,6 +12,7 @@ import {
   CREDIT_REFUND_REASONS,
 } from "@/lib/credit-costs";
 import { db } from "@/lib/db";
+import { can } from "@/lib/roles";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 const messageSchema = z.string().trim().min(2).max(2000);
@@ -25,6 +26,7 @@ export type SendProjectMessageResult =
         | "busy"
         | "notReady"
         | "insufficientCredits"
+        | "forbidden"
         | "generic";
     };
 
@@ -40,6 +42,10 @@ export async function sendProjectMessageAction(
 
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "generation.run")) {
+      return { error: "forbidden" };
+    }
 
     const project = await db.project.findFirst({
       where: {

@@ -14,6 +14,7 @@ import {
   writeWorkspaceFile,
 } from "./workspace";
 import { getTargetFrame, type TargetFrame } from "./frame";
+import { auditUiQuality, formatUiFindings } from "./ui-audit";
 import type { GenerationTarget } from "../lib/types";
 
 const execFileAsync = promisify(execFile);
@@ -348,6 +349,25 @@ export async function validateWorkspace(
     await validateDesktop(root, html, frame, errors, notes);
   }
 
+  try {
+    const uiFindings = await auditUiQuality(root);
+
+    if (uiFindings.length > 0) {
+      notes.push(...formatUiFindings(uiFindings));
+      notes.push(
+        "UI QUALITY: fix the structural findings above, then complete the interaction checklist from the system prompt.",
+      );
+    } else {
+      notes.push(
+        "UI QUALITY: static structural audit found no issue. Complete the interaction checklist from the system prompt manually.",
+      );
+    }
+  } catch (error) {
+    notes.push(
+      `UI QUALITY: audit could not run (${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
+
   const fileList =
     files
       .map((file) => `- ${file.path} (${file.size} bytes)`)
@@ -477,8 +497,8 @@ export function createWorkspaceTools(
     label: "Validate the generated app",
     description:
       options.target === "desktop"
-        ? "Validate the application: HTML structure, local assets, JavaScript syntax, the SQLite schema and the desktop bridge. Returns actionable errors when something is wrong."
-        : "Validate the application: HTML structure, local assets and JavaScript syntax. Returns actionable errors when something is wrong.",
+        ? "Validate the application: HTML structure, local assets, JavaScript syntax, the SQLite schema, the desktop bridge and UI quality warnings. Returns actionable errors when something is wrong."
+        : "Validate the application: HTML structure, local assets, JavaScript syntax and UI quality warnings. Returns actionable errors when something is wrong.",
     promptSnippet:
       "Validate the app and fix any reported issue.",
     parameters: Type.Object({}),

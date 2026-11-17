@@ -19,6 +19,7 @@ export interface Project {
   icon: ProjectIcon;
   prompt: string;
   status?: ProjectStatus;
+  syncEnabled?: boolean;
   href?: string;
 }
 
@@ -159,6 +160,7 @@ export interface WorkspaceOrganization {
   name: string;
   plan: string;
   credits: number;
+  role: import("./roles").Role;
 }
 
 export interface WorkspaceData {

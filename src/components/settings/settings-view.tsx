@@ -8,10 +8,7 @@ import {
   LogOut,
   ShieldCheck,
   UserRound,
-  UserRoundPlus,
-  Users,
 } from "lucide-react";
-import { toast } from "sonner";
 import { logoutAction } from "@/app/actions/auth";
 import {
   updateOrganizationAction,
@@ -19,6 +16,7 @@ import {
 } from "@/app/actions/settings";
 import { FormField } from "@/components/auth/form-field";
 import { LanguageSwitcher } from "@/components/shell/language-switcher";
+import { TeamSection } from "@/components/settings/team-section";
 import { formatNumber } from "@/i18n/format";
 import { useI18n } from "@/i18n/provider";
 import type {
@@ -39,11 +37,13 @@ export function SettingsView({
   organization,
   members,
   currentRole,
+  currentUserId,
 }: {
   user: WorkspaceUser;
   organization: WorkspaceOrganization;
   members: SettingsMember[];
   currentRole: string;
+  currentUserId: string;
 }) {
   const { locale, dict } = useI18n();
   const router = useRouter();
@@ -65,14 +65,6 @@ export function SettingsView({
     organization.plan;
   const canEditOrganization =
     currentRole === "owner" || currentRole === "admin";
-
-  function roleLabel(role: string): string {
-    return (
-      dict.settingsPage.roles[
-        role as keyof typeof dict.settingsPage.roles
-      ] ?? role
-    );
-  }
 
   function handleProfileSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -245,56 +237,11 @@ export function SettingsView({
                 </div>
               </form>
 
-              <div className="mt-6 border-t border-white/[0.06] pt-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-slate-400" />
-                    <h3 className="text-[12.5px] font-semibold text-white">
-                      {dict.settingsPage.members}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      toast(dict.settingsPage.inviteComingSoon)
-                    }
-                    className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-[#141d24] px-3 py-1.5 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
-                  >
-                    <UserRoundPlus className="h-3.5 w-3.5" />
-                    {dict.settingsPage.invite}
-                  </button>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {dict.settingsPage.membersDescription}
-                </p>
-
-                <ul className="mt-3 divide-y divide-white/[0.05]">
-                  {members.map((member) => (
-                    <li
-                      key={member.id}
-                      className="flex items-center justify-between gap-3 py-2.5"
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#19c765] text-[10px] font-bold text-white">
-                          {member.firstName.charAt(0)}
-                          {member.lastName.charAt(0)}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-[12px] font-medium text-white">
-                            {member.firstName} {member.lastName}
-                          </p>
-                          <p className="truncate text-[10.5px] text-slate-500">
-                            {member.email}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                        {roleLabel(member.role)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <TeamSection
+                members={members}
+                currentRole={currentRole}
+                currentUserId={currentUserId}
+              />
             </section>
           </div>
 

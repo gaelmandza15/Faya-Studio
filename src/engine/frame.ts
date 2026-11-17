@@ -1,4 +1,5 @@
 import type { GenerationTarget } from "../lib/types";
+import { buildUiQualityPrompt } from "./ui-quality";
 
 export const FRAME_VERSION = 1;
 
@@ -133,6 +134,8 @@ export function buildSystemPrompt(
       designSystem.trim(),
     );
   }
+
+  parts.push("", buildUiQualityPrompt(mode));
 
   return parts.join("\n");
 }

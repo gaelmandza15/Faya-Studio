@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { asRole } from "@/lib/roles";
 import type { WorkspaceData } from "@/lib/types";
 
 export const ORG_COOKIE = "faya_org";
@@ -39,6 +40,7 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceData> => {
     name: membership.organization.name,
     plan: membership.organization.plan,
     credits: membership.organization.credits,
+    role: asRole(membership.role),
   }));
 
   const initials =
@@ -58,6 +60,7 @@ export const getWorkspaceContext = cache(async (): Promise<WorkspaceData> => {
       name: activeMembership.organization.name,
       plan: activeMembership.organization.plan,
       credits: activeMembership.organization.credits,
+      role: asRole(activeMembership.role),
     },
     organizations,
   };

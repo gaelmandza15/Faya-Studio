@@ -20,6 +20,7 @@ model User {
   sessions           Session[]
   projects           Project[]           @relation("ProjectCreator")
   creditTransactions CreditTransaction[]
+  sentInvitations    Invitation[]        @relation("InvitationSender")
 }
 
 model Organization {
@@ -33,6 +34,7 @@ model Organization {
   memberships        Membership[]
   projects           Project[]
   creditTransactions CreditTransaction[]
+  invitations        Invitation[]
 }
 
 model Membership {
@@ -48,6 +50,22 @@ model Membership {
   @@index([organizationId])
 }
 
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String
+  role           String       @default("editor")
+  tokenHash      String       @unique
+  invitedById    String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User?        @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, email])
+}
+
 model Session {
   id        String   @id @default(cuid())
   tokenHash String   @unique
@@ -60,25 +78,109 @@ model Session {
 }
 
 model Project {
-  id             String          @id @default(cuid())
-  name           String
-  prompt         String
-  icon           String          @default("cube")
-  status         String          @default("generating")
-  target         String          @default("desktop")
-  organizationId String
-  createdById    String?
-  lastActivityAt DateTime        @default(now())
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy      User?           @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  jobs           GenerationJob[]
-  builds         BuildJob[]
-  messages       ProjectMessage[]
-  versions       ProjectVersion[]
+  id              String            @id @default(cuid())
+  name            String
+  prompt          String
+  icon            String            @default("cube")
+  status          String            @default("generating")
+  target          String            @default("desktop")
+  organizationId  String
+  createdById     String?
+  lastActivityAt  DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User?             @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  jobs            GenerationJob[]
+  builds          BuildJob[]
+  messages        ProjectMessage[]
+  versions        ProjectVersion[]
+  publication     Publication?
+  syncEnabled     Boolean           @default(false)
+  syncSeq         Int               @default(0)
+  appKey          String?           @unique
+  appKeyPrefix    String?
+  appKeyCreatedAt DateTime?
+  lastSyncAt      DateTime?
+  syncRecords     SyncRecord[]
+  syncDevices     SyncDevice[]
+  webhooks        WebhookEndpoint[]
 
   @@index([organizationId, lastActivityAt])
+}
+
+model SyncRecord {
+  id        String   @id @default(cuid())
+  projectId String
+  tableName String
+  rowKey    String
+  data      String?
+  deleted   Boolean  @default(false)
+  seq       Int
+  deviceId  String?
+  updatedAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, tableName, rowKey])
+  @@index([projectId, seq])
+}
+
+model SyncDevice {
+  id         String   @id @default(cuid())
+  projectId  String
+  deviceId   String
+  name       String
+  platform   String   @default("windows")
+  appVersion String?
+  lastSeq    Int      @default(0)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, deviceId])
+  @@index([projectId, lastSeenAt])
+}
+
+model WebhookEndpoint {
+  id             String            @id @default(cuid())
+  projectId      String
+  name           String            @default("Webhook")
+  url            String
+  secret         String
+  enabled        Boolean           @default(true)
+  lastDeliveryAt DateTime?
+  lastStatus     Int?
+  createdAt      DateTime          @default(now())
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries     WebhookDelivery[]
+
+  @@index([projectId, createdAt])
+}
+
+model WebhookDelivery {
+  id           String          @id @default(cuid())
+  endpointId   String
+  event        String
+  status       String          @default("pending")
+  responseCode Int?
+  error        String?
+  payload      String
+  createdAt    DateTime        @default(now())
+  endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+}
+
+model Publication {
+  id            String   @id @default(cuid())
+  projectId     String   @unique
+  slug          String   @unique
+  versionNumber Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
 }
 
 model ProjectVersion {
@@ -97,34 +199,35 @@ model ProjectVersion {
 }
 
 model BuildJob {
-  id           String   @id @default(cuid())
-  projectId    String
-  status       String   @default("queued")
-  error        String?
-  artifactPath String?
-  artifactName String?
-  artifactSize Int?
-  durationMs   Int?
+  id                  String   @id @default(cuid())
+  projectId           String
+  status              String   @default("queued")
+  error               String?
+  artifactPath        String?
+  artifactName        String?
+  artifactSize        Int?
+  durationMs          Int?
+  versionNumber       Int?
   creditTransactionId String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
   @@index([status, createdAt])
 }
 
 model GenerationJob {
-  id          String   @id @default(cuid())
-  projectId   String
-  status      String   @default("queued")
-  kind        String   @default("generate")
-  instruction String?
+  id                  String   @id @default(cuid())
+  projectId           String
+  status              String   @default("queued")
+  kind                String   @default("generate")
+  instruction         String?
   creditTransactionId String?
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  error               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
 }

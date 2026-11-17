@@ -13,10 +13,17 @@ import { startProjectAction } from "@/app/actions/projects";
 import { ProjectCard } from "@/components/dashboard/project-card";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/i18n/provider";
+import { useWorkspace } from "@/components/shell/workspace-provider";
+import { can } from "@/lib/roles";
 import type { Project } from "@/lib/types";
 
 export function ProjectsView({ projects }: { projects: Project[] }) {
   const { dict } = useI18n();
+  const workspace = useWorkspace();
+  const canCreate = can(
+    workspace.organization.role,
+    "project.create",
+  );
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -39,7 +46,7 @@ export function ProjectsView({ projects }: { projects: Project[] }) {
     event.preventDefault();
     const value = prompt.trim();
 
-    if (value.length < 3 || isPending) return;
+    if (value.length < 3 || isPending || !canCreate) return;
 
     startTransition(async () => {
       const result = await startProjectAction({ prompt: value });
@@ -68,17 +75,19 @@ export function ProjectsView({ projects }: { projects: Project[] }) {
               {dict.projectsPage.description}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setPrompt("");
-              setCreateOpen(true);
-            }}
-            className="flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
-          >
-            <Plus className="h-4 w-4" />
-            {dict.projectsPage.newProject}
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => {
+                setPrompt("");
+                setCreateOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+            >
+              <Plus className="h-4 w-4" />
+              {dict.projectsPage.newProject}
+            </button>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -120,14 +129,16 @@ export function ProjectsView({ projects }: { projects: Project[] }) {
             <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-slate-400">
               {dict.projectsPage.emptyDescription}
             </p>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="mt-5 flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
-            >
-              <Plus className="h-4 w-4" />
-              {dict.projectsPage.newProject}
-            </button>
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="mt-5 flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
+              >
+                <Plus className="h-4 w-4" />
+                {dict.projectsPage.newProject}
+              </button>
+            )}
           </div>
         ) : filtered.length === 0 ? (
           <p className="mt-8 text-center text-[13px] text-slate-500">

@@ -326,6 +326,12 @@ h1 {
   color: #64748b;
 }
 
+.search input:focus-visible {
+  outline: 2px solid rgba(27, 230, 122, 0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .primary,
 .secondary {
   display: inline-flex;
@@ -419,6 +425,11 @@ h2 {
 .contact-form input:focus {
   border-color: rgba(27, 230, 122, 0.55);
   box-shadow: 0 0 0 3px rgba(27, 230, 122, 0.08);
+}
+
+.contact-form input:focus-visible {
+  outline: 2px solid rgba(27, 230, 122, 0.55);
+  outline-offset: 1px;
 }
 
 .form-actions {

@@ -18,7 +18,10 @@ The editor's **Export** dialog starts a real desktop build:
    `workspaces/.build-jobs/<jobId>`, then overrides
    `src-tauri/migrations/schema.sql` with the project's
    `desktop-schema.sql` (root first, then
-   `.faya/desktop-schema.sql`), and calls `BuildRunner`.
+   `.faya/desktop-schema.sql`). When sync or webhooks are enabled, it also
+   copies `templates/faya-runtime/faya-sync.js` and writes
+   `faya-config.js` (platform URL + app key) into the frontend, then calls
+   `BuildRunner`. See `docs/app-link.md`.
 4. The resulting binary is copied to
    `workspaces/.artifacts/<jobId>/<app-name>.exe`, checked with `--self-test`,
    and recorded on the `BuildJob` row.

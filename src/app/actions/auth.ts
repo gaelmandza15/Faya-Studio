@@ -51,6 +51,12 @@ function setLocaleCookie(locale: string) {
   });
 }
 
+function safeNext(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string") return "/";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
 function slugify(value: string): string {
   return (
     value
@@ -95,7 +101,7 @@ export async function loginAction(
   await createSession(user.id);
   await setLocaleCookie(user.locale);
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function registerAction(
@@ -195,7 +201,7 @@ export async function registerAction(
     return { error: "generic" };
   }
 
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function logoutAction() {

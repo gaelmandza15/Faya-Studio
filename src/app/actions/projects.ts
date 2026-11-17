@@ -7,11 +7,13 @@ import { getLocale } from "@/i18n/server";
 import { db } from "@/lib/db";
 import { enqueueGeneration, enqueueModification } from "@/engine/jobs";
 import { chargeCredits, refundCredits } from "@/engine/credits";
+import { removePublicationFiles } from "@/engine/publications";
 import {
   CREDIT_COSTS,
   CREDIT_REFUND_REASONS,
 } from "@/lib/credit-costs";
 import { toProjectIcon } from "@/lib/project-utils";
+import { can } from "@/lib/roles";
 import type { ProjectIcon } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -25,15 +27,21 @@ const projectNameSchema = z.string().trim().min(1).max(80);
 
 export type StartProjectResult =
   | { projectId: string }
-  | { error: "invalidPrompt" | "insufficientCredits" | "generic" };
+  | {
+      error:
+        | "invalidPrompt"
+        | "insufficientCredits"
+        | "forbidden"
+        | "generic";
+    };
 
 export type ProjectMutationResult =
   | { ok: true }
-  | { error: "notFound" | "invalidName" | "generic" };
+  | { error: "notFound" | "invalidName" | "forbidden" | "generic" };
 
 export type DuplicateProjectResult =
   | { projectId: string }
-  | { error: "notFound" | "generic" };
+  | { error: "notFound" | "forbidden" | "generic" };
 
 function revalidateProjectViews() {
   revalidatePath("/");
@@ -88,6 +96,11 @@ export async function startProjectAction(input: {
 
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "project.create")) {
+      return { error: "forbidden" };
+    }
+
     const locale = await getLocale();
     const dict = getDictionary(locale);
     const derived = deriveProject(parsed.data.prompt, dict);
@@ -206,6 +219,11 @@ export async function renameProjectAction(
 
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "project.update")) {
+      return { error: "forbidden" };
+    }
+
     const result = await db.project.updateMany({
       where: {
         id: projectId,
@@ -234,6 +252,11 @@ export async function duplicateProjectAction(
 ): Promise<DuplicateProjectResult> {
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "project.create")) {
+      return { error: "forbidden" };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
@@ -274,6 +297,16 @@ export async function deleteProjectAction(
 ): Promise<ProjectMutationResult> {
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "project.delete")) {
+      return { error: "forbidden" };
+    }
+
+    const publication = await db.publication.findUnique({
+      where: { projectId },
+      select: { slug: true },
+    });
+
     const result = await db.project.deleteMany({
       where: {
         id: projectId,
@@ -283,6 +316,12 @@ export async function deleteProjectAction(
 
     if (result.count === 0) {
       return { error: "notFound" };
+    }
+
+    if (publication) {
+      await removePublicationFiles(publication.slug).catch(
+        () => undefined,
+      );
     }
 
     revalidateProjectViews();
@@ -296,6 +335,11 @@ export async function deleteProjectAction(
 export async function retryGenerationAction(projectId: string) {
   try {
     const workspace = await getWorkspaceContext();
+
+    if (!can(workspace.organization.role, "generation.run")) {
+      return { error: "forbidden" as const };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,

@@ -25,8 +25,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useI18n } from "@/i18n/provider";
+import { useWorkspace } from "@/components/shell/workspace-provider";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 import { getDemoData } from "@/lib/mock-data";
+import { can } from "@/lib/roles";
 import type { SuggestionIcon } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +46,11 @@ const SUGGESTION_ICONS: Record<SuggestionIcon, LucideIcon> = {
 export function PromptComposer() {
   const router = useRouter();
   const { locale, dict } = useI18n();
+  const workspace = useWorkspace();
+  const canCreate = can(
+    workspace.organization.role,
+    "project.create",
+  );
   const demo = getDemoData(locale);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
@@ -61,7 +68,7 @@ export function PromptComposer() {
   }, [value]);
 
   function goToEditor(prompt?: string) {
-    if (isPending) return;
+    if (isPending || !canCreate) return;
 
     const text = (prompt ?? value).trim() || demo.defaultPrompt;
 
@@ -117,6 +124,7 @@ export function PromptComposer() {
               onChange={(event) => setValue(event.target.value)}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
+              disabled={!canCreate}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -160,8 +168,8 @@ export function PromptComposer() {
 
           <button
             type="submit"
-            disabled={isPending}
-            className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#1be67a] px-5 py-2.5 text-[14.5px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.3)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] disabled:cursor-wait disabled:opacity-70"
+            disabled={isPending || !canCreate}
+            className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#1be67a] px-5 py-2.5 text-[14.5px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.3)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -172,6 +180,12 @@ export function PromptComposer() {
           </button>
         </div>
       </form>
+
+      {!canCreate && (
+        <p className="mt-2.5 px-1 text-[11.5px] text-slate-500">
+          {dict.common.readOnlyRole}
+        </p>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {demo.baseSuggestions.map((suggestion) => (

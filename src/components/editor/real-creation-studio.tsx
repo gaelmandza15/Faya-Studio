@@ -6,12 +6,15 @@ import { retryGenerationAction } from "@/app/actions/projects";
 import { sendProjectMessageAction } from "@/app/actions/conversation";
 import { EditorTopbar } from "@/components/editor/editor-topbar";
 import { ExportDialog } from "@/components/editor/export-dialog";
+import { PublishDialog } from "@/components/editor/publish-dialog";
 import { VersionsDialog } from "@/components/editor/versions-dialog";
 import { PreviewPanel } from "@/components/editor/preview-panel";
 import { RealConversationPanel } from "@/components/editor/real-conversation-panel";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { EngineEvent } from "@/engine/pi-engine";
 import { useI18n } from "@/i18n/provider";
+import { useWorkspace } from "@/components/shell/workspace-provider";
+import { can } from "@/lib/roles";
 import type {
   GenerationStatus,
   PreviewDevice,
@@ -53,6 +56,12 @@ export function RealCreationStudio({
   initialPreviewReady: boolean;
 }) {
   const { dict } = useI18n();
+  const workspace = useWorkspace();
+  const role = workspace.organization.role;
+  const canGenerate = can(role, "generation.run");
+  const canBuild = can(role, "build.run");
+  const canPublish = can(role, "publication.manage");
+  const canRestore = can(role, "version.restore");
   const [events, setEvents] = useState<EngineEvent[]>([]);
   const [messages, setMessages] = useState<ProjectMessageView[]>([]);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
@@ -66,6 +75,7 @@ export function RealCreationStudio({
   const [noJob, setNoJob] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [retrying, startRetry] = useTransition();
   const [sending, setSending] = useState(false);
@@ -214,6 +224,11 @@ export function RealCreationStudio({
   function handleRetry() {
     if (retrying) return;
 
+    if (!canGenerate) {
+      setPollError(dict.common.readOnlyRole);
+      return;
+    }
+
     startRetry(async () => {
       const result = await retryGenerationAction(projectId);
 
@@ -244,6 +259,11 @@ export function RealCreationStudio({
   }
 
   async function handleSend(message: string): Promise<boolean> {
+    if (!canGenerate) {
+      setPollError(dict.common.readOnlyRole);
+      return false;
+    }
+
     if (sending || status === "running" || !previewReady) return false;
 
     setSending(true);
@@ -298,6 +318,9 @@ export function RealCreationStudio({
         progressLabel={progressLabel}
         onExport={() => setExportOpen(true)}
         onVersions={() => setVersionsOpen(true)}
+        onPublish={() => setPublishOpen(true)}
+        canExport={canBuild}
+        canPublish={canPublish}
       />
 
       <ExportDialog
@@ -307,11 +330,19 @@ export function RealCreationStudio({
         projectName={projectName}
       />
 
+      <PublishDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        projectId={projectId}
+        projectName={projectName}
+      />
+
       <VersionsDialog
         open={versionsOpen}
         onOpenChange={setVersionsOpen}
         projectId={projectId}
         projectName={projectName}
+        canRestore={canRestore}
         onRestored={() => window.location.reload()}
       />
 
@@ -372,6 +403,7 @@ export function RealCreationStudio({
             onSend={handleSend}
             retrying={retrying}
             sending={sending}
+            canEdit={canGenerate}
           />
         </aside>
 

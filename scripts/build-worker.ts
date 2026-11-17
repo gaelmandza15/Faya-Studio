@@ -16,6 +16,7 @@ import {
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { getBuildRunner } from "../src/engine/build";
+import { installAppLinkRuntime } from "../src/engine/app-link-runtime";
 import { getWorkspacesRoot } from "../src/engine/workspace";
 import { refundCredits } from "../src/engine/credits";
 import { CREDIT_REFUND_REASONS } from "../src/lib/credit-costs";
@@ -85,6 +86,10 @@ async function main() {
     throw new Error(`Project not found: ${projectId}`);
   }
 
+  const enabledWebhooks = await prisma.webhookEndpoint.count({
+    where: { projectId, enabled: true },
+  });
+
   const job = await prisma.buildJob.findUnique({
     where: { id: jobId },
     select: { projectId: true, creditTransactionId: true },
@@ -94,9 +99,19 @@ async function main() {
     throw new Error(`Build job not found: ${jobId}`);
   }
 
+  const latestVersion = await prisma.projectVersion.findFirst({
+    where: { projectId },
+    orderBy: { number: "desc" },
+    select: { number: true },
+  });
+
   await prisma.buildJob.update({
     where: { id: jobId },
-    data: { status: "running", error: null },
+    data: {
+      status: "running",
+      error: null,
+      versionNumber: latestVersion?.number ?? null,
+    },
   });
 
   const root = getWorkspacesRoot();
@@ -180,6 +195,18 @@ async function main() {
         schemaOverride,
         "utf8",
       );
+    }
+
+    if (project.appKey && (project.syncEnabled || enabledWebhooks > 0)) {
+      await installAppLinkRuntime({
+        frontendDir,
+        project: {
+          id: project.id,
+          appKey: project.appKey,
+          syncEnabled: project.syncEnabled,
+        },
+        hooks: enabledWebhooks > 0,
+      });
     }
 
     const runner = getBuildRunner();

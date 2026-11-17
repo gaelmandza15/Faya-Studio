@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LayoutGrid, Plus, Search } from "lucide-react";
+import { Cloud, HardDrive, LayoutGrid, Play, Plus, Search, Sparkles } from "lucide-react";
 import { ProjectGlyph } from "@/components/dashboard/glyphs";
+import { useWorkspace } from "@/components/shell/workspace-provider";
 import { useI18n } from "@/i18n/provider";
+import { can } from "@/lib/roles";
 import type { Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +16,11 @@ export function ApplicationsView({
   applications: Project[];
 }) {
   const { dict } = useI18n();
+  const workspace = useWorkspace();
+  const canCreate = can(
+    workspace.organization.role,
+    "project.create",
+  );
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
@@ -39,13 +46,15 @@ export function ApplicationsView({
               {dict.applicationsPage.description}
             </p>
           </div>
-          <Link
-            href="/projets"
-            className="flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
-          >
-            <Plus className="h-4 w-4" />
-            {dict.projectsPage.newProject}
-          </Link>
+          {canCreate && (
+            <Link
+              href="/projets"
+              className="flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1be67a]"
+            >
+              <Plus className="h-4 w-4" />
+              {dict.projectsPage.newProject}
+            </Link>
+          )}
         </div>
 
         {applications.length === 0 ? (
@@ -59,13 +68,15 @@ export function ApplicationsView({
             <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-slate-400">
               {dict.applicationsPage.emptyDescription}
             </p>
-            <Link
-              href="/projets"
-              className="mt-5 flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
-            >
-              <Plus className="h-4 w-4" />
-              {dict.projectsPage.newProject}
-            </Link>
+            {canCreate && (
+              <Link
+                href="/projets"
+                className="mt-5 flex items-center gap-2 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
+              >
+                <Plus className="h-4 w-4" />
+                {dict.projectsPage.newProject}
+              </Link>
+            )}
           </div>
         ) : (
           <>
@@ -129,22 +140,60 @@ export function ApplicationsView({
                       {application.prompt}
                     </p>
 
-                    <div className="mt-4 flex items-center gap-2">
-                      <Link
-                        href={
-                          application.href ??
-                          `/creer?project=${application.id}`
-                        }
-                        className="rounded-lg bg-[#1be67a] px-3 py-1.5 text-[11.5px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
-                      >
-                        {dict.common.open}
-                      </Link>
-                      <Link
-                        href={`/applications/${application.id}`}
-                        className="rounded-lg border border-white/15 bg-[#141d24] px-3 py-1.5 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
-                      >
-                        {dict.applicationsPage.details}
-                      </Link>
+                    <div className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
+                      {application.syncEnabled ? (
+                        <Cloud className="h-3 w-3 text-sky-300" />
+                      ) : (
+                        <HardDrive className="h-3 w-3" />
+                      )}
+                      {application.syncEnabled
+                        ? dict.applicationsPage.modeSynced
+                        : dict.applicationsPage.modeLocal}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {application.status === "ready" ? (
+                        <>
+                          <Link
+                            href={`/app/${application.id}`}
+                            className="flex items-center gap-1.5 rounded-lg bg-[#1be67a] px-3 py-1.5 text-[11.5px] font-semibold text-slate-950 shadow-[0_0_12px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c]"
+                          >
+                            <Play className="h-3 w-3 fill-slate-950" />
+                            {dict.applicationsPage.launch}
+                          </Link>
+                          <Link
+                            href={`/applications/${application.id}`}
+                            className="rounded-lg border border-white/15 bg-[#141d24] px-3 py-1.5 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
+                          >
+                            {dict.applicationsPage.details}
+                          </Link>
+                          <Link
+                            href={`/creer?project=${application.id}`}
+                            className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
+                            title={dict.applicationsPage.openInEditor}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          <Link
+                            href={
+                              application.href ??
+                              `/creer?project=${application.id}`
+                            }
+                            className="rounded-lg bg-[#1be67a] px-3 py-1.5 text-[11.5px] font-semibold text-slate-950 transition hover:bg-[#16cf6c]"
+                          >
+                            {dict.common.open}
+                          </Link>
+                          <Link
+                            href={`/applications/${application.id}`}
+                            className="rounded-lg border border-white/15 bg-[#141d24] px-3 py-1.5 text-[11.5px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
+                          >
+                            {dict.applicationsPage.details}
+                          </Link>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

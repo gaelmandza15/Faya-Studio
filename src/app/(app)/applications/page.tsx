@@ -32,6 +32,7 @@ export default async function ApplicationsPage() {
         : project.status === "error"
           ? "error"
           : "generating",
+    syncEnabled: project.syncEnabled,
     modified: `${dict.common.modified} ${formatRelativeTime(locale, project.lastActivityAt)}`,
     href: `/creer?project=${project.id}`,
   }));
