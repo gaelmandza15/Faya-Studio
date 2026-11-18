@@ -2,20 +2,19 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import {
   SYNC_MAX_BATCH,
-  SYNC_MAX_PAYLOAD_BYTES,
   SYNC_MAX_REQUEST_BYTES,
-  SYNC_TABLE_PATTERN,
   bearerToken,
   getProjectForAppKey,
 } from "@/lib/app-link";
 import { db } from "@/lib/db";
-import {
-  applyDatabaseChange,
-  getProjectDatabase,
-} from "@/engine/project-db";
+import { getProjectDataProvider } from "@/engine/project-db";
 import { applyChangesInTx } from "@/engine/sync-store";
 import { broadcastProjectUpdate } from "@/lib/project-events";
 import { logger } from "@/lib/logger";
+import {
+  validateSyncChange,
+  type ValidatedSyncChange,
+} from "@/lib/sync-payload";
 
 
 const CORS_HEADERS = {
@@ -25,16 +24,6 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-type SyncPayload = {
-  table: string;
-  id: string;
-  updatedAt: string;
-  deleted: boolean;
-  data: Record<string, unknown> | null;
-};
-
-type ValidatedChange = SyncPayload & { serialized: string | null };
-
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: CORS_HEADERS });
 }
@@ -43,20 +32,6 @@ function text(value: unknown, max: number): string | null {
   return typeof value === "string" && value.length > 0 && value.length <= max
     ? value
     : null;
-}
-
-function parseData(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function serialize(change: {
-  deleted: boolean;
-  data: Record<string, unknown> | null;
-}): string | null {
-  if (change.deleted) return null;
-  return JSON.stringify(change.data ?? {});
 }
 
 async function readBody(request: Request): Promise<unknown> {
@@ -99,42 +74,6 @@ async function touchDevice(
       ...(cursor !== undefined ? { lastSeq: cursor } : {}),
     },
   });
-}
-
-function validateChange(input: unknown): ValidatedChange | null {
-  if (!input || typeof input !== "object") return null;
-
-  const source = input as Record<string, unknown>;
-  const table = text(source.table, 64);
-  const id =
-    typeof source.id === "string"
-      ? text(source.id, 200)
-      : typeof source.id === "number" && Number.isFinite(source.id)
-        ? String(source.id)
-        : null;
-  const deleted = source.deleted === true;
-  const data = parseData(source.data);
-  const updatedAtInput = text(source.updatedAt, 40);
-  const parsed = updatedAtInput ? new Date(updatedAtInput) : new Date();
-
-  if (!table || !SYNC_TABLE_PATTERN.test(table) || !id) return null;
-  if (Number.isNaN(parsed.getTime())) return null;
-  if (!deleted && !data) return null;
-
-  const serialized = serialize({ deleted, data });
-
-  if (serialized && Buffer.byteLength(serialized, "utf8") > SYNC_MAX_PAYLOAD_BYTES) {
-    return null;
-  }
-
-  return {
-    table,
-    id,
-    updatedAt: parsed.toISOString(),
-    deleted,
-    data,
-    serialized,
-  };
 }
 
 function toChange(record: {
@@ -290,8 +229,10 @@ export async function POST(
       }
 
       const changes = rawChanges
-        .map(validateChange)
-        .filter((change): change is ValidatedChange => Boolean(change));
+        .map(validateSyncChange)
+        .filter(
+          (change): change is ValidatedSyncChange => Boolean(change),
+        );
 
       if (changes.length === 0) {
         return json({ error: "noValidChanges" }, 400);
@@ -327,10 +268,10 @@ export async function POST(
       // browser users working on /app/[id] see them too.
       if (result.accepted.length > 0) {
         try {
-          const database = await getProjectDatabase(project.id);
+          const data = await getProjectDataProvider(project.id);
 
           for (const change of result.accepted) {
-            applyDatabaseChange(database, {
+            await data.applyChange({
               table: change.table,
               id: change.id,
               data: change.data,

@@ -272,6 +272,31 @@ export const fr = {
         "Vous pouvez consulter l'état de synchronisation, mais pas le modifier.",
       error: "L'opération a échoué. Réessayez.",
     },
+    backups: {
+      section: "Sauvegardes",
+      hint:
+        "Capturez les données de l'application côté plateforme. Les appareils desktop synchronisés conservent leur copie locale et ne sont pas rembobinés.",
+      create: "Créer une sauvegarde",
+      creating: "Sauvegarde…",
+      empty: "Aucune sauvegarde.",
+      download: "Télécharger",
+      restore: "Restaurer",
+      restoreConfirm:
+        "Restaurer cette sauvegarde ? Les données web actuelles seront remplacées et une sauvegarde de sécurité sera créée avant l'opération.",
+      restoreDone: "Sauvegarde restaurée.",
+      restoreBlocked:
+        "Désactivez la synchronisation desktop avant de restaurer une sauvegarde.",
+      delete: "Supprimer",
+      deleteConfirm: "Supprimer cette sauvegarde ?",
+      kindManual: "Manuelle",
+      kindPreRestore: "Avant restauration",
+      version: "Version {number}",
+      sizeKb: "{size} Ko",
+      sizeMb: "{size} Mo",
+      viewerHint:
+        "Vous pouvez consulter les sauvegardes, mais pas les gérer.",
+      error: "L'opération a échoué. Réessayez.",
+    },
     connections: {
       section: "Connexions externes",
       hint:
@@ -297,6 +322,12 @@ export const fr = {
       emitHint:
         "Depuis l'application : FayaSync.emit(\"facture.validee\", { id: 42 }).",
       endpoint: "Point d'envoi de l'application",
+      inboundEndpoint: "API d'ingestion externe",
+      inboundHint:
+        "Écrivez dans les données de l'application depuis n8n, Make, un script ou votre backend.",
+      inboundAuth: "Authorization: Bearer <clé d'application>",
+      inboundExample:
+        '{"table":"taches","id":"42","data":{"titre":"Depuis n8n"}}',
       lastDelivery: "Dernière livraison",
       never: "Jamais",
       toggleEnable: "Activer",

@@ -83,6 +83,44 @@ L'éditeur accepte `?project=<id>` pour ouvrir un projet existant, ou
 - `src/lib/env.ts` valide `DATABASE_URL`, les URLs et les niveaux au démarrage ;
   `next.config.ts` échoue tôt si la configuration est invalide.
 
+## Providers et configuration
+
+Les routes métier dépendent d'interfaces, pas d'implémentations :
+
+- `ProjectDataProvider` : SQLite local, libSQL/Turso prévu ;
+- `RateLimiter` : mémoire, Redis prévu ;
+- `ProjectEventBus` : mémoire, Redis pub/sub prévu ;
+- `JobDispatcher` : processus `tsx`, file Postgres prévue.
+
+Les profils et providers se règlent dans `.env` :
+
+```env
+FAYA_PROFILE=local
+PROJECT_DATA_PROVIDER=sqlite
+RATE_LIMITER=memory
+EVENT_BUS=memory
+JOB_DISPATCHER=process
+STORAGE_PROVIDER=local
+```
+
+Un provider non implémenté échoue explicitement, sans repli silencieux.
+Détails et contrats : [`docs/providers.md`](docs/providers.md).
+
+## Déploiement staging
+
+Le `Dockerfile` prépare une image Linux avec Prisma généré pour PostgreSQL. Le
+schéma PostgreSQL est dérivé du schéma SQLite pour éviter la dérive :
+
+```bash
+npm run prisma:prepare-postgres
+npm run prisma:generate:postgres
+npm run db:push:postgres       # staging initial
+```
+
+Procédure complète (Neon/Supabase, Fly/Render, volume, E2E distant, limites) :
+[`docs/deploy/staging.md`](docs/deploy/staging.md). Les builds Tauri restent
+liés à un agent Windows.
+
 ## Base de données
 
 SQLite + Prisma (`prisma/schema.prisma`). Le modèle couvre :
@@ -317,6 +355,15 @@ applications générées qui utilisent d'autres API Tauri que `invoke` non prise
 en charge, et isolation same-origin de l'iframe à renforcer pour une exposition
 publique.
 
+## Sauvegardes
+
+La fiche application permet de créer, télécharger et restaurer une sauvegarde
+de la base SQLite côté plateforme. Chaque restauration crée d'abord une
+sauvegarde `pre-restore`. La restauration est bloquée si la synchronisation
+desktop est active, car les postes locaux ne sont pas rembobinés.
+
+Détails et limites : [`docs/backups.md`](docs/backups.md).
+
 ## Applications liées et synchronisation
 
 Chaque application choisit explicitement son mode :
@@ -396,9 +443,23 @@ n8n, Make, Zapier, Slack ou une API interne sans intégrer chaque fournisseur.
 - Chaque livraison est journalisée (`WebhookDelivery`) avec le code HTTP et
   l'erreur éventuelle ; l'UI affiche le dernier statut.
 
-Limite actuelle : 10 endpoints par application, envoi immédiat sans retry
-automatique. Les webhooks entrants (outil externe → application) restent à
-concevoir.
+Dans l'autre sens, l'**API d'ingestion** permet à un outil externe d'écrire
+dans l'application :
+
+```http
+POST /api/hooks/in
+Authorization: Bearer <clé d'application>
+
+{ "table": "factures", "id": "42", "data": { "total": 1200 } }
+```
+
+Le changement est appliqué à la base plateforme, publié dans `SyncRecord` et
+diffusé en SSE ; les onglets ouverts se rafraîchissent, les appareils desktop le
+reçoivent au prochain pull. Un lot `{ "changes": [...] }` est accepté, avec la
+même validation que la synchronisation.
+
+Limites : 10 endpoints sortants par application, envoi immédiat sans retry
+automatique, 240 requêtes/minute pour l'ingestion entrante.
 
 ## Profil de génération desktop
 

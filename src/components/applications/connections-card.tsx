@@ -202,6 +202,22 @@ export function ConnectionsCard({
         <p className="mt-1 text-[9.5px] text-slate-500">{labels.emitHint}</p>
       </div>
 
+      <div className="mt-2 rounded-lg border border-white/[0.06] bg-[#090e12] px-3 py-2">
+        <p className="text-[9.5px] uppercase tracking-wider text-slate-500">
+          {labels.inboundEndpoint}
+        </p>
+        <code className="mt-0.5 block truncate font-mono text-[10px] text-slate-300">
+          POST {platformUrl}/api/hooks/in
+        </code>
+        <code className="mt-1 block truncate font-mono text-[9.5px] text-slate-500">
+          {labels.inboundAuth}
+        </code>
+        <code className="mt-1 block break-all font-mono text-[9.5px] text-slate-400">
+          {labels.inboundExample}
+        </code>
+        <p className="mt-1 text-[9.5px] text-slate-500">{labels.inboundHint}</p>
+      </div>
+
       {message && (
         <p className="mt-3 rounded-lg border border-[#1be67a]/20 bg-[#1be67a]/[0.07] px-3 py-2 text-[10.5px] text-[#8af3b8]">
           {message}

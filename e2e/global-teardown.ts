@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { PROJECT_ID, readE2eState } from "./state";
+import { PROJECT_ID, BACKUP_PROJECT_ID, readE2eState } from "./state";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -33,7 +33,9 @@ export default async function globalTeardown() {
       });
     }
 
-    await prisma.project.deleteMany({ where: { id: PROJECT_ID } });
+    await prisma.project.deleteMany({
+      where: { id: { in: [PROJECT_ID, BACKUP_PROJECT_ID] } },
+    });
     console.log(`[e2e] Removed ${PROJECT_ID} and its test session.`);
   } catch (error) {
     console.warn(

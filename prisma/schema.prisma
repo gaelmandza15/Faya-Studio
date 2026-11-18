@@ -105,6 +105,7 @@ model Project {
   syncRecords     SyncRecord[]
   syncDevices     SyncDevice[]
   webhooks        WebhookEndpoint[]
+  backups         ProjectBackup[]
 
   @@index([organizationId, lastActivityAt])
 }
@@ -256,4 +257,17 @@ model CreditTransaction {
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
+}
+
+model ProjectBackup {
+  id            String   @id @default(cuid())
+  projectId     String
+  kind          String   @default("manual")
+  fileName      String
+  size          Int
+  versionNumber Int?
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }

@@ -200,6 +200,38 @@ Each delivery is stored in `WebhookDelivery` with the HTTP status and error.
 Endpoints are limited to 10 per application. Delivery is synchronous with a
 10-second timeout and no retry yet.
 
+## Inbound ingestion API
+
+External tools can also write into the application:
+
+```http
+POST /api/hooks/in
+Authorization: Bearer <app key>
+Content-Type: application/json
+
+{
+  "table": "invoices",
+  "id": "42",
+  "updatedAt": "2026-11-18T10:00:00.000Z",
+  "data": { "id": 42, "total": 1200 }
+}
+```
+
+A batch is accepted as `{ "changes": [ ... ] }`, up to 500 changes. Each change
+uses the same validation as the desktop sync push: table name, stable `id`,
+JSON object, timestamp and size limits.
+
+Effects:
+
+- the change is stored in `SyncRecord` with `deviceId = "external"`;
+- it is applied to the platform-side database with the `ProjectDataProvider`;
+- connected browser tabs receive an `external_write` SSE event and reload;
+- desktop devices receive it on their next pull.
+
+Retries are safe when they reuse the same `id` and `updatedAt`: last-write-wins
+makes a duplicate a no-op. The endpoint is limited to 240 requests/minute per
+application.
+
 ## Verification
 
 ```bash

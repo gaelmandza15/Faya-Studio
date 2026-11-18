@@ -8,8 +8,7 @@ import { assertWorkspaceId } from "@/engine/workspace";
 import { logger } from "@/lib/logger";
 import {
   diffSnapshots,
-  getProjectDatabase,
-  snapshotTable,
+  getProjectDataProvider,
 } from "@/engine/project-db";
 import { applyChangesInTx } from "@/engine/sync-store";
 import { broadcastProjectUpdate } from "@/lib/project-events";
@@ -149,11 +148,10 @@ export async function POST(
   log.debug("DB request", { cmd, kind: inspection.kind });
 
   try {
-    const database = await getProjectDatabase(projectId);
-    const statement = database.prepare(query);
+    const data = await getProjectDataProvider(projectId);
 
     if (cmd === "db_select") {
-      const rows = statement.all(...boundParams);
+      const rows = await data.select(query, boundParams);
       log.debug("db_select ok", { rows: (rows as unknown[]).length });
       return NextResponse.json({ ok: true, result: rows });
     }
@@ -161,15 +159,15 @@ export async function POST(
     const target = inspection.target;
     const before =
       project.syncEnabled && target
-        ? snapshotTable(database, target.table)
+        ? await data.snapshot(target.table)
         : null;
 
-    const info = statement.run(...boundParams);
+    const info = await data.execute(query, boundParams);
 
     // Web writes must reach desktop devices through the same sync stream.
     if (project.syncEnabled && target && before) {
       try {
-        const after = snapshotTable(database, target.table);
+        const after = await data.snapshot(target.table);
 
         if (after) {
           const now = new Date();

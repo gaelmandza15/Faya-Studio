@@ -5,7 +5,7 @@ import { chromium } from "@playwright/test";
 import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { getWorkspacesRoot } from "../src/engine/workspace";
-import { PROJECT_ID } from "./state";
+import { PROJECT_ID, BACKUP_PROJECT_ID } from "./state";
 
 config({ path: ".env.local" });
 config({ path: ".env" });
@@ -60,7 +60,14 @@ async function setupRemote() {
     await writeFile(
       path.join(STATE_DIR, "state.json"),
       JSON.stringify(
-        { projectId, appKey, token: "", organizationId: "" },
+        {
+          projectId,
+          backupProjectId:
+            process.env.E2E_BACKUP_PROJECT_ID ?? projectId,
+          appKey,
+          token: "",
+          organizationId: "",
+        },
         null,
         2,
       ),
@@ -94,6 +101,10 @@ async function prepareWorkspace(target: string) {
 
   const fayaDir = path.join(target, ".faya");
   await mkdir(fayaDir, { recursive: true });
+  await rm(path.join(fayaDir, "backups"), {
+    recursive: true,
+    force: true,
+  });
 
   const schema = await readFile(
     path.join(FIXTURE_DIR, "desktop-schema.sql"),
@@ -251,6 +262,47 @@ export default async function globalSetup() {
 
     await prepareWorkspace(path.join(getWorkspacesRoot(), PROJECT_ID));
 
+    await prisma.project.upsert({
+      where: { id: BACKUP_PROJECT_ID },
+      create: {
+        id: BACKUP_PROJECT_ID,
+        name: "E2E Backup",
+        prompt: "Application déterministe pour les tests de sauvegarde.",
+        icon: "cube",
+        status: "ready",
+        target: "desktop",
+        organizationId: membership.organizationId,
+        createdById: user.id,
+        syncEnabled: false,
+      },
+      update: {
+        name: "E2E Backup",
+        prompt: "Application déterministe pour les tests de sauvegarde.",
+        icon: "cube",
+        status: "ready",
+        target: "desktop",
+        organizationId: membership.organizationId,
+        createdById: user.id,
+        syncEnabled: false,
+        appKey: null,
+        appKeyPrefix: null,
+        appKeyCreatedAt: null,
+        syncSeq: 0,
+        lastSyncAt: null,
+      },
+    });
+
+    await prisma.syncRecord.deleteMany({
+      where: { projectId: BACKUP_PROJECT_ID },
+    });
+    await prisma.syncDevice.deleteMany({
+      where: { projectId: BACKUP_PROJECT_ID },
+    });
+
+    await prepareWorkspace(
+      path.join(getWorkspacesRoot(), BACKUP_PROJECT_ID),
+    );
+
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
@@ -315,6 +367,7 @@ export default async function globalSetup() {
         JSON.stringify(
           {
             projectId: PROJECT_ID,
+            backupProjectId: BACKUP_PROJECT_ID,
             appKey,
             token,
             organizationId: membership.organizationId,

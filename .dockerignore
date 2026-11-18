@@ -1,0 +1,14 @@
+node_modules
+.next
+workspaces
+.e2e
+playwright-report
+test-results
+prisma/dev.db
+prisma/dev.db-journal
+prisma/postgres/schema.prisma
+.env
+.env.*
+!.env.example
+.dev-server.log
+*.log

@@ -270,6 +270,30 @@ export const en: Dictionary = {
         "You can view the sync state, but not change it.",
       error: "The operation failed. Try again.",
     },
+    backups: {
+      section: "Backups",
+      hint:
+        "Snapshot the application data hosted on the platform. Synced desktop devices keep their local copy and are not rolled back.",
+      create: "Create backup",
+      creating: "Backing up…",
+      empty: "No backup yet.",
+      download: "Download",
+      restore: "Restore",
+      restoreConfirm:
+        "Restore this backup? Current web data will be replaced and a safety backup will be created first.",
+      restoreDone: "Backup restored.",
+      restoreBlocked:
+        "Disable desktop sync before restoring a backup.",
+      delete: "Delete",
+      deleteConfirm: "Delete this backup?",
+      kindManual: "Manual",
+      kindPreRestore: "Before restore",
+      version: "Version {number}",
+      sizeKb: "{size} KB",
+      sizeMb: "{size} MB",
+      viewerHint: "You can view backups, but not manage them.",
+      error: "The operation failed. Try again.",
+    },
     connections: {
       section: "External connections",
       hint:
@@ -295,6 +319,12 @@ export const en: Dictionary = {
       emitHint:
         "From the application: FayaSync.emit(\"invoice.paid\", { id: 42 }).",
       endpoint: "Application event endpoint",
+      inboundEndpoint: "Inbound ingestion API",
+      inboundHint:
+        "Write application data from n8n, Make, a script or your backend.",
+      inboundAuth: "Authorization: Bearer <app key>",
+      inboundExample:
+        '{"table":"tasks","id":"42","data":{"title":"From n8n"}}',
       lastDelivery: "Last delivery",
       never: "Never",
       toggleEnable: "Enable",

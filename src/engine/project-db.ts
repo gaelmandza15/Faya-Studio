@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { getWorkspacesRoot } from "./workspace";
 
@@ -36,6 +36,23 @@ export interface DatabaseChange {
   id: string;
   data: Record<string, unknown> | null;
   deleted: boolean;
+}
+
+/**
+ * Contract for a project's data store. The SQLite adapter is local-only; a
+ * libSQL/Turso adapter will implement the same surface for cloud deployments.
+ */
+export interface ProjectDataProvider {
+  select(
+    query: string,
+    params: unknown[],
+  ): Promise<Record<string, unknown>[]>;
+  execute(
+    query: string,
+    params: unknown[],
+  ): Promise<{ changes: number; lastInsertRowid: number }>;
+  snapshot(table: string): Promise<TableSnapshot | null>;
+  applyChange(change: DatabaseChange): Promise<boolean>;
 }
 
 const TABLE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -296,6 +313,43 @@ export async function getProjectDatabase(projectId: string): Promise<SqliteDatab
   return database;
 }
 
+/**
+ * Creates a consistent snapshot of the project database (WAL checkpoint
+ * included) and returns its size in bytes.
+ */
+export async function backupProjectDatabase(
+  projectId: string,
+  targetPath: string,
+): Promise<number> {
+  const database = await getProjectDatabase(projectId);
+
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await rm(targetPath, { force: true });
+
+  database.exec(
+    `VACUUM INTO '${targetPath.replace(/'/g, "''")}'`,
+  );
+
+  const info = await stat(targetPath);
+  return info.size;
+}
+
+/**
+ * Closes the cached connection so a restore can replace the database file.
+ * The next request reopens it and reapplies the schema.
+ */
+export function closeProjectDatabase(projectId: string) {
+  const database = openDatabases.get(projectId);
+
+  if (database) {
+    database.close();
+  }
+
+  openDatabases.delete(projectId);
+  appliedSchemaVersions.delete(projectId);
+  projectProviders.delete(projectId);
+}
+
 export function quoteIdentifier(value: string): string {
   return '"' + String(value).replace(/"/g, '""') + '"';
 }
@@ -472,3 +526,74 @@ export function applyDatabaseChange(
 
   return true;
 }
+
+class SqliteProjectDataProvider implements ProjectDataProvider {
+  constructor(private readonly database: SqliteDatabase) {}
+
+  async select(
+    query: string,
+    params: unknown[],
+  ): Promise<Record<string, unknown>[]> {
+    return this.database.prepare(query).all(...params) as Record<
+      string,
+      unknown
+    >[];
+  }
+
+  async execute(
+    query: string,
+    params: unknown[],
+  ): Promise<{ changes: number; lastInsertRowid: number }> {
+    const info = this.database.prepare(query).run(...params);
+
+    return {
+      changes: info.changes,
+      lastInsertRowid: Number(info.lastInsertRowid),
+    };
+  }
+
+  async snapshot(table: string): Promise<TableSnapshot | null> {
+    return snapshotTable(this.database, table);
+  }
+
+  async applyChange(change: DatabaseChange): Promise<boolean> {
+    return applyDatabaseChange(this.database, change);
+  }
+}
+
+const globalForProviders = globalThis as unknown as {
+  __fayaProjectDataProviders?: Map<string, ProjectDataProvider>;
+};
+
+const projectProviders: Map<string, ProjectDataProvider> =
+  globalForProviders.__fayaProjectDataProviders ??
+  (globalForProviders.__fayaProjectDataProviders = new Map());
+
+/**
+ * Returns the configured data provider for a project. Only SQLite ships
+ * locally; selecting an unimplemented provider fails loudly.
+ */
+export async function getProjectDataProvider(
+  projectId: string,
+): Promise<ProjectDataProvider> {
+  const provider = (process.env.PROJECT_DATA_PROVIDER ?? "sqlite").toLowerCase();
+
+  if (provider !== "sqlite") {
+    throw new Error(
+      `Project data provider "${provider}" is not implemented. Use PROJECT_DATA_PROVIDER=sqlite.`,
+    );
+  }
+
+  const cached = projectProviders.get(projectId);
+
+  if (cached) {
+    return cached;
+  }
+
+  const created = new SqliteProjectDataProvider(
+    await getProjectDatabase(projectId),
+  );
+  projectProviders.set(projectId, created);
+  return created;
+}
+

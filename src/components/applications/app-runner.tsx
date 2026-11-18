@@ -85,7 +85,11 @@ export function AppRunner({ project, src }: AppRunnerProps) {
 
           // Desktop changes always refresh this tab. Web changes refresh other
           // tabs, but not the one that performed the write.
-          if (data.type === "desktop_push") {
+          if (
+            data.type === "desktop_push" ||
+            data.type === "restore" ||
+            data.type === "external_write"
+          ) {
             scheduleReload();
           } else if (
             data.type === "web_write" &&

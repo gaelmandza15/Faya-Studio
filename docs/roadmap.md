@@ -82,126 +82,119 @@ Reste optionnel : iPhone/WebKit et petit mobile 360 px.
 **Acceptation** : health check fonctionnel, lint/tsc/build et 10 tests E2E
 passent.
 
-## Phase 1 — Abstractions de production (2 à 3 semaines)
+## Phase 1 — Abstractions de production (socle livré)
 
 Objectif : pouvoir changer d'infrastructure sans toucher aux routes métier.
 
-### 1.1 Stockage
+### Livré
 
-`StorageProvider` :
+- `ProjectDataProvider` avec adaptateur SQLite local ; les routes du Web Bridge
+  et de la synchronisation ne parlent plus directement à `node:sqlite`.
+- `RateLimiter` avec adaptateur mémoire et factory `RATE_LIMITER`.
+- `ProjectEventBus` avec adaptateur mémoire et factory `EVENT_BUS`.
+- `JobDispatcher` avec adaptateur processus et factory `JOB_DISPATCHER`.
+- Profils `FAYA_PROFILE` et variables de providers validées par `env.ts`.
+- Documentation [`docs/providers.md`](providers.md).
 
-- `LocalStorageProvider` (défaut, système de fichiers) ;
-- `S3StorageProvider` (R2/S3) pour les workspaces, publications et artefacts.
+### Reste à faire
 
-Contrat : `read`, `write`, `list`, `remove`, `stat`, `signedUrl`.
-
-### 1.2 Données applicatives
-
-`ProjectDataProvider` :
-
-- `SqliteProjectDataProvider` (local, `node:sqlite`) ;
-- `LibsqlProjectDataProvider` (cloud, Turso).
-
-Contrat : `select`, `execute`, `snapshot`, `applyChange`.
-
-### 1.3 Événements et limites
-
-- `RateLimiter` : mémoire ↔ Redis (Upstash).
-- `ProjectEvents` : registre local ↔ Redis pub/sub.
-- `JobQueue` : processus détaché ↔ table Postgres avec
-  `SELECT ... FOR UPDATE SKIP LOCKED` et leases.
-
-### 1.4 Secrets
-
+- `StorageProvider` : fichiers locaux ↔ S3/R2 ;
+- adaptateurs libSQL, Redis et Postgres ;
 - chiffrement au repos des clés d'application et secrets webhook ;
-- rotation documentée ;
-- aucune clé dans les logs.
+- tests d'intégration par adaptateur ;
+- migration Prisma des métadonnées vers PostgreSQL.
 
-### 1.5 Configuration
+**Acceptation** : la suite E2E locale passe sans changement ; aucun route
+handler ne connaît l'implémentation ; un provider non implémenté échoue
+explicitement.
 
-- profils `local`, `staging`, `production` ;
-- aucune dépendance à Docker ;
-- valeurs par défaut locales identiques au comportement actuel.
-
-**Acceptation** : la suite E2E locale passe sans changement ; les adaptateurs
-cloud ont des tests d'intégration séparés ; aucun route handler ne connaît
-l'implémentation.
-
-## Phase 2 — Staging cloud (2 à 3 semaines)
+## Phase 2 — Staging cloud (préparation livrée)
 
 Objectif : valider la plateforme dans des conditions réelles.
 
-Services recommandés, sans Docker :
+### Livré
 
-- **PostgreSQL managé** (Neon/Supabase/Railway) pour les métadonnées ;
-- **Turso/libSQL** pour les bases par projet ;
-- **Cloudflare R2** ou S3 pour les fichiers ;
-- **Upstash Redis** pour rate limit et SSE (ou Postgres LISTEN/NOTIFY en
-  premier jet) ;
-- **application** sur Fly.io/Render/Vercel ;
-- **agent Windows** pour les builds Tauri : ce PC au début, puis VM dédiée.
+- schéma Prisma PostgreSQL généré depuis la source SQLite
+  (`scripts/prepare-postgres-schema.ts`) et validé ;
+- scripts `prisma:generate:postgres`, `db:push:postgres`, `db:seed:postgres` ;
+- `Dockerfile` multi-stage pour un hébergement Linux ;
+- `docs/deploy/staging.md` et `staging.env.example` ;
+- mode E2E distant `E2E_REMOTE=1` avec login réel ;
+- garde-fou explicite : un export Tauri sur Linux échoue avec un message
+  demandant un agent Windows.
 
-À faire :
+### Reste à faire (nécessite des comptes/credentials)
 
-- migration Prisma `sqlite → postgres` pour les métadonnées ;
-- provisioning d'une base libSQL par projet ;
-- upload/download des workspaces via stockage objet ;
-- worker de génération qui claim les jobs en base ;
-- SSE multi-instance ;
-- domaine, HTTPS, cookies `secure` ;
-- `E2E_REMOTE=1` contre le staging ;
-- sauvegardes et restauration testées.
+- provisionner PostgreSQL managé et le volume persistant ;
+- construire et pousser l'image sur Fly/Render/Railway ;
+- configurer le domaine, HTTPS et les cookies `secure` ;
+- créer le projet fixture et le compte de test sur le staging ;
+- exécuter `E2E_REMOTE=1` contre le staging ;
+- tester une sauvegarde/restauration ;
+- agent Windows de build ;
+- adaptateurs libSQL, Redis, S3 et SSE multi-instance.
 
-**Acceptation** :
+**Acceptation cible (après déploiement)** :
 
-- deux instances applicatives voient les mêmes données et reçoivent les mêmes
-  événements ;
+- deux instances voient les mêmes données et reçoivent les mêmes événements ;
 - un redémarrage ne perd ni workspace ni artefact ;
 - les E2E distants passent sur le staging ;
 - un build Tauri est produit par l'agent Windows et téléchargeable.
 
-## Phase 3 — Cycle de vie des applications (3 à 4 semaines)
+## Phase 3 — Cycle de vie des applications (en cours)
 
 Objectif : tenir la promesse « application liée, mise à jour, partagée ».
 
-### 3.1 Mises à jour automatiques
+### 3.5 Sauvegardes et restauration — première version livrée
+
+- snapshot SQLite côté plateforme (`VACUUM INTO`) ;
+- téléchargement authentifié ;
+- restauration avec sauvegarde de sécurité `pre-restore` ;
+- rétention de 20 sauvegardes ;
+- blocage de la restauration tant que la synchronisation desktop est active ;
+- UI sur la fiche application et test E2E dédié.
+
+Limites : les postes desktop et `SyncRecord` ne sont pas sauvegardés ; pas
+encore de stockage objet ni de planification.
+
+### 3.1 Mises à jour automatiques — à venir
 
 - updater Tauri signé ;
 - endpoint de manifeste de version ;
 - artefacts versionnés sur stockage objet ;
 - déploiement progressif et rollback.
 
-### 3.2 Version navigateur connectée
+Prérequis : agent Windows de build et clés de signature.
+
+### 3.2 Version navigateur connectée — à venir
 
 - le runner web et l'EXE utilisent le même flux de synchronisation ;
 - publication d'une application synchronisée (et non plus seulement une copie
   figée) ;
 - gestion de session et de rôles côté web.
 
-### 3.3 Utilisateurs et permissions dans l'application
+### 3.3 Utilisateurs et permissions dans l'application — à venir
 
 - comptes applicatifs ou réutilisation des membres de l'organisation ;
 - rôles par application ;
 - sessions et permissions côté desktop comme côté web ;
 - audit des accès.
 
-### 3.4 Webhooks entrants et API
+### 3.4 Webhooks entrants et API — livré (première version)
 
-- endpoint d'ingestion avec clé et idempotence ;
-- écriture dans la base projet + `SyncRecord` ;
-- documentation OpenAPI ;
-- connecteurs universels (n8n, Make, Zapier).
+- `POST /api/hooks/in` authentifié par clé d'application ;
+- change unique ou lot `{ changes: [...] }`, même validation que la sync ;
+- écriture dans `SyncRecord`, base plateforme et diffusion SSE
+  `external_write` ;
+- rate limit 240 req/min par application ;
+- documentation et test E2E dédié.
 
-### 3.5 Sauvegardes et restauration
+Reste : spécification OpenAPI, en-tête d'idempotence explicite, connecteurs
+préconstruits Zapier/Make.
 
-- export/import d'une base projet ;
-- sauvegardes centralisées ;
-- restauration après incident ;
-- rétention configurable.
-
-**Acceptation** : un utilisateur peut mettre à jour une app installée, ouvrir
-la même app dans le navigateur, inviter un collaborateur avec un rôle, et
-recevoir un événement externe.
+**Acceptation cible** : un utilisateur peut mettre à jour une app installée,
+ouvrir la même app dans le navigateur, inviter un collaborateur avec un rôle,
+recevoir un événement externe, et restaurer une sauvegarde.
 
 ## Phase 4 — Exploitation et scale (continu)
 

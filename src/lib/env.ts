@@ -7,6 +7,12 @@
 
 export type FayaEnvironment = "development" | "production" | "test";
 export type FayaLogLevel = "debug" | "info" | "warn" | "error";
+export type FayaProfile = "local" | "staging" | "production";
+export type ProjectDataProviderName = "sqlite" | "libsql";
+export type RateLimiterName = "memory" | "redis";
+export type EventBusName = "memory" | "redis";
+export type JobDispatcherName = "process" | "postgres";
+export type StorageProviderName = "local" | "s3";
 
 export interface FayaEnv {
   DATABASE_URL: string;
@@ -15,6 +21,12 @@ export interface FayaEnv {
   FAYA_PLATFORM_URL: string;
   NODE_ENV: FayaEnvironment;
   LOG_LEVEL: FayaLogLevel;
+  FAYA_PROFILE: FayaProfile;
+  PROJECT_DATA_PROVIDER: ProjectDataProviderName;
+  RATE_LIMITER: RateLimiterName;
+  EVENT_BUS: EventBusName;
+  JOB_DISPATCHER: JobDispatcherName;
+  STORAGE_PROVIDER: StorageProviderName;
 }
 
 const NODE_ENVIRONMENTS: FayaEnvironment[] = [
@@ -23,6 +35,26 @@ const NODE_ENVIRONMENTS: FayaEnvironment[] = [
   "test",
 ];
 const LOG_LEVELS: FayaLogLevel[] = ["debug", "info", "warn", "error"];
+
+function readEnum<T extends string>(
+  name: string,
+  allowed: readonly T[],
+  fallback: T,
+  warnings: string[],
+): T {
+  const raw = process.env[name]?.trim().toLowerCase();
+
+  if (!raw) return fallback;
+
+  if (!allowed.includes(raw as T)) {
+    warnings.push(
+      `${name} "${raw}" is invalid; using "${fallback}". Allowed: ${allowed.join(", ")}.`,
+    );
+    return fallback;
+  }
+
+  return raw as T;
+}
 
 function normalizePlatformUrl(value: string, errors: string[]): string {
   const trimmed = value.trim().replace(/\/+$/, "");
@@ -114,6 +146,57 @@ export function validateEnv(): FayaEnv {
     );
   }
 
+  const FAYA_PROFILE = readEnum<FayaProfile>(
+    "FAYA_PROFILE",
+    ["local", "staging", "production"],
+    "local",
+    warnings,
+  );
+  const PROJECT_DATA_PROVIDER = readEnum<ProjectDataProviderName>(
+    "PROJECT_DATA_PROVIDER",
+    ["sqlite", "libsql"],
+    "sqlite",
+    warnings,
+  );
+  const RATE_LIMITER = readEnum<RateLimiterName>(
+    "RATE_LIMITER",
+    ["memory", "redis"],
+    "memory",
+    warnings,
+  );
+  const EVENT_BUS = readEnum<EventBusName>(
+    "EVENT_BUS",
+    ["memory", "redis"],
+    "memory",
+    warnings,
+  );
+  const JOB_DISPATCHER = readEnum<JobDispatcherName>(
+    "JOB_DISPATCHER",
+    ["process", "postgres"],
+    "process",
+    warnings,
+  );
+  const STORAGE_PROVIDER = readEnum<StorageProviderName>(
+    "STORAGE_PROVIDER",
+    ["local", "s3"],
+    "local",
+    warnings,
+  );
+
+  if (FAYA_PROFILE !== "local") {
+    if (
+      PROJECT_DATA_PROVIDER === "sqlite" ||
+      RATE_LIMITER === "memory" ||
+      EVENT_BUS === "memory" ||
+      JOB_DISPATCHER === "process" ||
+      STORAGE_PROVIDER === "local"
+    ) {
+      warnings.push(
+        "A non-local FAYA_PROFILE is configured but one or more providers still use local adapters.",
+      );
+    }
+  }
+
   for (const warning of warnings) {
     console.warn(`[faya-env] WARN: ${warning}`);
   }
@@ -133,6 +216,12 @@ export function validateEnv(): FayaEnv {
     FAYA_PLATFORM_URL,
     NODE_ENV,
     LOG_LEVEL,
+    FAYA_PROFILE,
+    PROJECT_DATA_PROVIDER,
+    RATE_LIMITER,
+    EVENT_BUS,
+    JOB_DISPATCHER,
+    STORAGE_PROVIDER,
   };
 }
 

@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppLinkCard } from "@/components/applications/app-link-card";
+import { BackupsCard } from "@/components/applications/backups-card";
 import { ConnectionsCard } from "@/components/applications/connections-card";
 import { ProjectGlyph } from "@/components/dashboard/glyphs";
 import { formatDate, formatRelativeTime } from "@/i18n/format";
@@ -101,6 +102,10 @@ export default async function ApplicationDetailPage({
           lastStatus: true,
           lastDeliveryAt: true,
         },
+      },
+      backups: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
       },
       _count: {
         select: { versions: true, builds: true },
@@ -597,7 +602,20 @@ export default async function ApplicationDetailPage({
           </div>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-5 space-y-5">
+          <BackupsCard
+            projectId={project.id}
+            syncEnabled={project.syncEnabled}
+            canManage={canManage}
+            backups={project.backups.map((backup) => ({
+              id: backup.id,
+              kind: backup.kind,
+              size: backup.size,
+              versionNumber: backup.versionNumber,
+              createdAt: backup.createdAt.toISOString(),
+            }))}
+          />
+
           <ConnectionsCard
             projectId={project.id}
             canManage={canManage}

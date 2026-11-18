@@ -1,14 +1,18 @@
-import { spawn } from "node:child_process";
-import { mkdir, open } from "node:fs/promises";
-import path from "node:path";
-import { refundCredits } from "@/engine/credits";
-import { CREDIT_REFUND_REASONS } from "@/lib/credit-costs";
+import { getJobDispatcher } from "@/engine/job-dispatcher";
 import { db } from "@/lib/db";
 
 export async function enqueueBuild(
   projectId: string,
   creditTransactionId?: string,
 ) {
+  const dispatcher = (process.env.JOB_DISPATCHER ?? "process").toLowerCase();
+
+  if (dispatcher === "process" && process.platform !== "win32") {
+    throw new Error(
+      "Desktop exports require a Windows build agent. Configure JOB_DISPATCHER=postgres with a Windows worker before enabling exports on this host.",
+    );
+  }
+
   await db.buildJob.updateMany({
     where: {
       status: "running",
@@ -40,69 +44,10 @@ export async function enqueueBuild(
     },
   });
 
-  const workerPath = path.join(
-    process.cwd(),
-    "scripts",
-    "build-worker.ts",
-  );
-  const tsxCli = path.join(
-    process.cwd(),
-    "node_modules",
-    "tsx",
-    "dist",
-    "cli.mjs",
-  );
-  const logsDir = path.join(process.cwd(), "workspaces", ".logs");
-  await mkdir(logsDir, { recursive: true });
-
-  const logHandle = await open(
-    path.join(logsDir, `${job.id}.log`),
-    "a",
-  );
-  await logHandle.write(
-    `[build-jobs] Starting build for project ${projectId}, job ${job.id}\n`,
-  );
-
-  try {
-    const child = spawn(
-      process.execPath,
-      [
-        tsxCli,
-        workerPath,
-        "--project",
-        projectId,
-        "--job",
-        job.id,
-      ],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        detached: true,
-        stdio: ["ignore", logHandle.fd, logHandle.fd],
-        windowsHide: true,
-      },
-    );
-
-    child.on("error", (error) => {
-      void db.buildJob
-        .update({
-          where: { id: job.id },
-          data: { status: "error", error: error.message },
-        })
-        .catch(() => undefined);
-
-      if (job.creditTransactionId) {
-        void refundCredits(db, {
-          transactionId: job.creditTransactionId,
-          reason: CREDIT_REFUND_REASONS.build,
-        });
-      }
-    });
-
-    child.unref();
-  } finally {
-    await logHandle.close();
-  }
+  await getJobDispatcher().dispatchBuild(projectId, {
+    id: job.id,
+    creditTransactionId: job.creditTransactionId,
+  });
 
   return { job, reused: false };
 }
