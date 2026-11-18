@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { gotoInteractive } from "./helpers";
 import { readE2eState } from "./state";
 
 test.describe("Platform shell", () => {
   test("authenticated dashboard and applications list", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await gotoInteractive(page, "/");
     await expect(
       page.getByRole("heading", { name: "Bienvenue sur Faya-Studio !" }),
     ).toBeVisible();
@@ -21,7 +22,7 @@ test.describe("Platform shell", () => {
   test("application detail exposes the launch action", async ({ page }) => {
     const { projectId } = readE2eState();
 
-    await page.goto(`/applications/${projectId}`, { waitUntil: "domcontentloaded" });
+    await gotoInteractive(page, `/applications/${projectId}`);
     await expect(
       page.getByRole("heading", { name: "E2E Runner" }),
     ).toBeVisible();
@@ -34,7 +35,7 @@ test.describe("Platform shell", () => {
   test("notifications dropdown opens and closes with Escape", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await gotoInteractive(page, "/");
     await page.getByRole("button", { name: "Notifications" }).click();
     await expect(page.getByText("Application mise à jour")).toBeVisible();
 
@@ -46,7 +47,7 @@ test.describe("Platform shell", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await gotoInteractive(page, "/");
 
     await page.getByRole("button", { name: "Ouvrir le menu" }).click();
     const dialog = page.getByRole("dialog", { name: "Menu de navigation" });

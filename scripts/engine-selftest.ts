@@ -8,6 +8,11 @@ import {
 } from "../src/engine/workspace";
 import { validateWorkspace } from "../src/engine/tools";
 import { buildSystemPrompt } from "../src/engine/frame";
+import {
+  buildAcceptanceRecord,
+  formatAcceptanceFailure,
+  parseStoredAcceptanceReport,
+} from "../src/engine/acceptance";
 
 const VALID_HTML = `<!DOCTYPE html>
 <html lang="fr">
@@ -353,6 +358,38 @@ async function main() {
     check(
       "un plan d'acceptation valide est accepté",
       withPlan.ok && withPlan.report.includes("ACCEPTANCE: 1 flow"),
+    );
+
+    const failedOutcome = {
+      status: "failed" as const,
+      report: {
+        ok: false,
+        generatedAt: new Date().toISOString(),
+        mode: "platform" as const,
+        flows: [
+          {
+            name: "Créer",
+            ok: false,
+            failedStep: 2,
+            error: "locator not found",
+          },
+        ],
+        consoleErrors: ["boom"],
+      },
+    };
+    const record = buildAcceptanceRecord(failedOutcome);
+
+    check(
+      "un échec d'acceptation est résumé et persistable",
+      record.acceptanceStatus === "failed" &&
+        record.acceptanceFailed === 1 &&
+        parseStoredAcceptanceReport(record.acceptanceReport)?.flows.length === 1,
+    );
+    check(
+      "le rapport d'échec est exploitable par l'agent",
+      formatAcceptanceFailure(failedOutcome.report).includes(
+        'FAIL "Créer" at step 2',
+      ),
     );
 
     console.log(

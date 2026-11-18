@@ -10,6 +10,10 @@ import { createWorkspaceTools, validateWorkspace } from "./tools";
 import { listWorkspaceFiles, type WorkspaceFile } from "./workspace";
 import { buildSystemPrompt } from "./frame";
 import {
+  formatAcceptanceFailure,
+  type AcceptanceOutcome,
+} from "./acceptance";
+import {
   installDesignSystem,
   readWorkspaceDesignSystem,
 } from "./design";
@@ -39,6 +43,8 @@ export interface GenerationResult {
   files: WorkspaceFile[];
   checkReport: string;
   error?: string;
+  /** Result of the automated acceptance run, when one was requested. */
+  acceptance?: AcceptanceOutcome;
 }
 
 // Prompt construction lives in ./frame.
@@ -90,6 +96,7 @@ export async function generateApp({
   mode = "generate",
   context,
   timeoutMs,
+  acceptance,
 }: {
   prompt: string;
   workspaceDir: string;
@@ -98,6 +105,11 @@ export async function generateApp({
   mode?: "generate" | "modify";
   context?: string;
   timeoutMs?: number;
+  /**
+   * Runs the generated acceptance plan in the real runner. Failures are fed
+   * back to the agent within the same session, so it can repair the UI.
+   */
+  acceptance?: () => Promise<AcceptanceOutcome>;
 }): Promise<GenerationResult> {
   const effectiveTimeoutMs = timeoutMs ?? getEngineTimeoutMs(mode);
   const emit = (event: EngineEvent) => {
@@ -234,13 +246,43 @@ export async function generateApp({
     let summary =
       finishSummary || session.getLastAssistantText()?.trim() || "";
     let check = await validateWorkspace(workspaceDir, { target, requireAcceptance: mode === "generate" });
+    let acceptanceOutcome: AcceptanceOutcome | undefined;
 
-    // The agent sometimes stops before every referenced file is written.
-    // Feed the validator report back and ask for a targeted repair before
-    // failing the whole job.
+    const runAcceptance = async (): Promise<AcceptanceOutcome | undefined> => {
+      if (!acceptance) return undefined;
+
+      emit({
+        type: "status",
+        status: "generating",
+        message: "Running acceptance flows…",
+      });
+
+      try {
+        return await acceptance();
+      } catch (error) {
+        return {
+          status: "skipped",
+          reason: `acceptance-error: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+    };
+
+    if (check.ok) {
+      acceptanceOutcome = await runAcceptance();
+    }
+
+    // The agent sometimes stops before every referenced file is written, or
+    // ships a UI flow that fails in the real runner. Feed both reports back
+    // and ask for a targeted repair before failing the whole job.
     let repairAttempt = 0;
 
-    while (!check.ok && !timedOut && repairAttempt < 2) {
+    while (
+      (!check.ok || acceptanceOutcome?.status === "failed") &&
+      !timedOut &&
+      repairAttempt < 2
+    ) {
       repairAttempt += 1;
       emit({
         type: "status",
@@ -248,15 +290,24 @@ export async function generateApp({
         message: `Validation failed — repair attempt ${repairAttempt}.`,
       });
 
-      try {
-        await session.prompt(
-          [
-            "The workspace validation failed. Fix every error below, create any missing referenced file, and keep index.html consistent.",
-            "Then call run_checks again. Do not call finish until run_checks passes.",
-            "",
-            check.report,
-          ].join("\n"),
+      const instructions = [
+        "The workspace validation failed. Fix every error below, create any missing referenced file, and keep index.html consistent.",
+        "Then call run_checks again. Do not call finish until run_checks passes.",
+      ];
+
+      if (!check.ok) {
+        instructions.push("", check.report);
+      }
+
+      if (acceptanceOutcome?.status === "failed") {
+        instructions.push(
+          "",
+          formatAcceptanceFailure(acceptanceOutcome.report),
         );
+      }
+
+      try {
+        await session.prompt(instructions.join("\n"));
       } catch {
         break;
       }
@@ -264,6 +315,13 @@ export async function generateApp({
       summary =
         finishSummary || session.getLastAssistantText()?.trim() || summary;
       check = await validateWorkspace(workspaceDir, { target, requireAcceptance: mode === "generate" });
+
+      if (check.ok) {
+        acceptanceOutcome = await runAcceptance();
+      } else {
+        // The files changed again; any previous acceptance result is stale.
+        acceptanceOutcome = undefined;
+      }
     }
 
     const files = await listWorkspaceFiles(workspaceDir, 6);
@@ -278,6 +336,7 @@ export async function generateApp({
         files,
         checkReport: check.report,
         error,
+        acceptance: acceptanceOutcome,
       };
     }
 
@@ -291,6 +350,7 @@ export async function generateApp({
         files,
         checkReport: check.report,
         error,
+        acceptance: acceptanceOutcome,
       };
     }
 
@@ -302,6 +362,7 @@ export async function generateApp({
       workspaceDir,
       files,
       checkReport: check.report,
+      acceptance: acceptanceOutcome,
     };
   } catch (error) {
     const message =

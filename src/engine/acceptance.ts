@@ -79,6 +79,168 @@ export type AcceptancePlan = z.infer<typeof acceptancePlanSchema>;
 export type AcceptanceStep = z.infer<typeof stepSchema>;
 export type AcceptanceLocator = z.infer<typeof locatorSchema>;
 
+export const ACCEPTANCE_RESULTS_FILE = "acceptance-results.json";
+const MAX_STORED_REPORT_CHARS = 16_000;
+
+export type AcceptanceMode = "platform" | "static";
+
+export type AcceptanceFlowResult = {
+  name: string;
+  ok: boolean;
+  failedStep?: number;
+  error?: string;
+  durationMs?: number;
+};
+
+export type AcceptanceReport = {
+  ok: boolean;
+  generatedAt: string;
+  mode: AcceptanceMode;
+  baseUrl?: string;
+  flows: AcceptanceFlowResult[];
+  consoleErrors: string[];
+  error?: string;
+};
+
+export type AcceptanceOutcome =
+  | { status: "passed"; report: AcceptanceReport }
+  | { status: "failed"; report: AcceptanceReport }
+  | { status: "skipped"; reason: string };
+
+const flowResultSchema = z.object({
+  name: z.string().min(1).max(200),
+  ok: z.boolean(),
+  failedStep: z.number().int().min(1).optional(),
+  error: z.string().max(4000).optional(),
+  durationMs: z.number().int().min(0).optional(),
+});
+
+const reportSchema = z.object({
+  ok: z.boolean(),
+  generatedAt: z.string().min(1),
+  mode: z.enum(["platform", "static"]).default("static"),
+  baseUrl: z.string().max(500).optional(),
+  flows: z.array(flowResultSchema).max(20),
+  consoleErrors: z.array(z.string().max(1000)).max(50).default([]),
+  error: z.string().max(4000).optional(),
+});
+
+export function parseAcceptanceReport(value: unknown): AcceptanceReport | null {
+  const parsed = reportSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export function parseStoredAcceptanceReport(
+  value: string | null,
+): AcceptanceReport | null {
+  if (!value) return null;
+
+  try {
+    return parseAcceptanceReport(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+export function summarizeAcceptanceReport(report: AcceptanceReport): {
+  passed: number;
+  total: number;
+  failed: number;
+} {
+  const total = report.flows.length;
+  const passed = report.flows.filter((flow) => flow.ok).length;
+  return { passed, total, failed: total - passed };
+}
+
+/** Text handed back to the generation agent when a flow fails. */
+export function formatAcceptanceFailure(report: AcceptanceReport): string {
+  const lines = [
+    `The automatic acceptance run failed (${report.mode} mode, ${report.baseUrl ?? "local"}).`,
+    "These flows are executed in the real application with Playwright:",
+  ];
+
+  for (const flow of report.flows) {
+    if (flow.ok) {
+      lines.push(`- PASS "${flow.name}"`);
+      continue;
+    }
+
+    const step =
+      typeof flow.failedStep === "number"
+        ? ` at step ${flow.failedStep}`
+        : "";
+    lines.push(
+      `- FAIL "${flow.name}"${step}: ${flow.error ?? "unknown error"}`,
+    );
+  }
+
+  if (report.consoleErrors.length > 0) {
+    lines.push("", "Browser console errors:");
+    for (const error of report.consoleErrors.slice(0, 8)) {
+      lines.push(`- ${error}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "Fix the application so every flow passes. If the failing locator does not",
+    "match the real UI because acceptance.json itself is wrong, update",
+    "acceptance.json instead. Keep the plan semantic and aligned with the UI,",
+    "then call run_checks again. Do not call finish until the plan is correct.",
+  );
+
+  return lines.join("\n");
+}
+
+export type AcceptanceRecord = {
+  acceptanceStatus: "passed" | "failed" | "skipped";
+  acceptancePassed: number;
+  acceptanceTotal: number;
+  acceptanceFailed: number;
+  acceptanceRunAt: Date;
+  acceptanceError: string | null;
+  acceptanceReport: string | null;
+};
+
+export function buildAcceptanceRecord(
+  outcome: AcceptanceOutcome,
+  warning?: string | null,
+  now: Date = new Date(),
+): AcceptanceRecord {
+  if (outcome.status === "skipped") {
+    return {
+      acceptanceStatus: "skipped",
+      acceptancePassed: 0,
+      acceptanceTotal: 0,
+      acceptanceFailed: 0,
+      acceptanceRunAt: now,
+      acceptanceError: outcome.reason.slice(0, 1000),
+      acceptanceReport: null,
+    };
+  }
+
+  const summary = summarizeAcceptanceReport(outcome.report);
+  const serialized = JSON.stringify(outcome.report);
+  const errorParts = outcome.report.error
+    ? [outcome.report.error]
+    : [];
+  if (warning) errorParts.push(warning);
+
+  return {
+    acceptanceStatus: outcome.status,
+    acceptancePassed: summary.passed,
+    acceptanceTotal: summary.total,
+    acceptanceFailed: summary.failed,
+    acceptanceRunAt: now,
+    acceptanceError:
+      errorParts.join(" ").slice(0, 1000) || null,
+    acceptanceReport:
+      serialized.length <= MAX_STORED_REPORT_CHARS
+        ? serialized
+        : `${serialized.slice(0, MAX_STORED_REPORT_CHARS)}…`,
+  };
+}
+
 export type AcceptanceValidation =
   | { ok: true; plan: AcceptancePlan }
   | { ok: false; missing: boolean; errors: string[] };

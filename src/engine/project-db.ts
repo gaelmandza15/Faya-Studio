@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { getWorkspacesRoot } from "./workspace";
 
@@ -239,7 +239,7 @@ export function syncSchemaColumns(
 }
 
 async function applySchema(
-  projectId: string,
+  cacheKey: string,
   workspaceRoot: string,
   database: SqliteDatabase,
 ) {
@@ -252,7 +252,7 @@ async function applySchema(
     return;
   }
 
-  if (appliedSchemaVersions.get(projectId) === info.mtimeMs) {
+  if (appliedSchemaVersions.get(cacheKey) === info.mtimeMs) {
     return;
   }
 
@@ -265,7 +265,7 @@ async function applySchema(
   } catch (error) {
     // Keep the database usable and surface the problem in server logs.
     console.warn(
-      `[project-db] Could not apply desktop-schema.sql for ${projectId}:`,
+      `[project-db] Could not apply desktop-schema.sql for ${cacheKey}:`,
       error instanceof Error ? error.message : error,
     );
   }
@@ -274,42 +274,116 @@ async function applySchema(
     const added = syncSchemaColumns(database, schema);
     if (added > 0) {
       console.info(
-        `[project-db] Added ${added} column(s) to ${projectId}.`,
+        `[project-db] Added ${added} column(s) to ${cacheKey}.`,
       );
     }
   } catch (error) {
     console.warn(
-      `[project-db] Could not synchronize columns for ${projectId}:`,
+      `[project-db] Could not synchronize columns for ${cacheKey}:`,
       error instanceof Error ? error.message : error,
     );
   }
 
-  appliedSchemaVersions.set(projectId, info.mtimeMs);
+  appliedSchemaVersions.set(cacheKey, info.mtimeMs);
 }
 
-export async function getProjectDatabase(projectId: string): Promise<SqliteDatabase> {
+export interface ProjectDatabaseOptions {
+  /**
+   * Acceptance runs use a throwaway database seeded from desktop-schema.sql
+   * instead of the application's live data.
+   */
+  sandbox?: string;
+  /** Delete sandbox files older than this when a new sandbox opens. */
+  pruneOlderThanMs?: number;
+}
+
+export const SANDBOX_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function databaseCacheKey(projectId: string, sandbox?: string): string {
+  return sandbox ? `${projectId}::${sandbox}` : projectId;
+}
+
+async function pruneSandboxes(
+  projectId: string,
+  keepKey: string,
+  olderThanMs: number,
+) {
+  const dir = path.join(getWorkspacesRoot(), projectId, ".faya", "sandbox");
+  const entries = await readdir(dir).catch(() => [] as string[]);
+  const cutoff = Date.now() - olderThanMs;
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".db")) continue;
+
+    const sandbox = entry.slice(0, -3);
+    const key = databaseCacheKey(projectId, sandbox);
+    if (key === keepKey) continue;
+
+    const file = path.join(dir, entry);
+    const info = await stat(file).catch(() => null);
+    if (!info || info.mtimeMs >= cutoff) continue;
+
+    const database = openDatabases.get(key);
+    try {
+      database?.close();
+    } catch {
+      // Best effort: the file may already be closed.
+    }
+    openDatabases.delete(key);
+    appliedSchemaVersions.delete(key);
+    projectProviders.delete(key);
+
+    await rm(file, { force: true }).catch(() => undefined);
+    await rm(`${file}-wal`, { force: true }).catch(() => undefined);
+    await rm(`${file}-shm`, { force: true }).catch(() => undefined);
+  }
+}
+
+export async function getProjectDatabase(
+  projectId: string,
+  options: ProjectDatabaseOptions = {},
+): Promise<SqliteDatabase> {
   const workspaceRoot = path.join(getWorkspacesRoot(), projectId);
-  const cached = openDatabases.get(projectId);
+  const sandbox =
+    options.sandbox && SANDBOX_ID_PATTERN.test(options.sandbox)
+      ? options.sandbox
+      : undefined;
+  const cacheKey = databaseCacheKey(projectId, sandbox);
+  const cached = openDatabases.get(cacheKey);
 
   if (cached) {
     // Pick up a regenerated desktop-schema.sql without restarting the server.
-    await applySchema(projectId, workspaceRoot, cached);
+    await applySchema(cacheKey, workspaceRoot, cached);
     return cached;
   }
 
   const fayaDir = path.join(workspaceRoot, ".faya");
   await mkdir(fayaDir, { recursive: true });
 
-  const dbPath = path.join(fayaDir, "app.db");
+  let dbPath: string;
+
+  if (sandbox) {
+    await pruneSandboxes(
+      projectId,
+      cacheKey,
+      options.pruneOlderThanMs ?? 10 * 60 * 1000,
+    );
+    const sandboxDir = path.join(fayaDir, "sandbox");
+    await mkdir(sandboxDir, { recursive: true });
+    dbPath = path.join(sandboxDir, `${sandbox}.db`);
+  } else {
+    dbPath = path.join(fayaDir, "app.db");
+  }
+
   const { DatabaseSync } = getSqliteModule();
   const database = new DatabaseSync(dbPath);
   database.exec(
     "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
   );
 
-  await applySchema(projectId, workspaceRoot, database);
+  await applySchema(cacheKey, workspaceRoot, database);
 
-  openDatabases.set(projectId, database);
+  openDatabases.set(cacheKey, database);
   return database;
 }
 
@@ -575,6 +649,7 @@ const projectProviders: Map<string, ProjectDataProvider> =
  */
 export async function getProjectDataProvider(
   projectId: string,
+  options: ProjectDatabaseOptions = {},
 ): Promise<ProjectDataProvider> {
   const provider = (process.env.PROJECT_DATA_PROVIDER ?? "sqlite").toLowerCase();
 
@@ -584,16 +659,21 @@ export async function getProjectDataProvider(
     );
   }
 
-  const cached = projectProviders.get(projectId);
+  const sandbox =
+    options.sandbox && SANDBOX_ID_PATTERN.test(options.sandbox)
+      ? options.sandbox
+      : undefined;
+  const cacheKey = databaseCacheKey(projectId, sandbox);
+  const cached = projectProviders.get(cacheKey);
 
   if (cached) {
     return cached;
   }
 
   const created = new SqliteProjectDataProvider(
-    await getProjectDatabase(projectId),
+    await getProjectDatabase(projectId, { ...options, sandbox }),
   );
-  projectProviders.set(projectId, created);
+  projectProviders.set(cacheKey, created);
   return created;
 }
 

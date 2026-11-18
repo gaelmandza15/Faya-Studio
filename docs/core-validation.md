@@ -77,6 +77,17 @@ systématiquement.
 
 Le cœur fonctionne : décrire → générer → exécuter → lire/écrire → modifier →
 conserver. Les deux corrections essentielles sont le **timeout** et la
-**boucle de réparation**. La suite est en place : `acceptance.json` est exigé
-à la génération et le runner Playwright l'exécute après coup. Il reste à
-transformer son résultat en statut visible dans la fiche application.
+**boucle de réparation**.
+
+L'acceptation est désormais une vraie porte de qualité :
+
+- `acceptance.json` est exécuté dans le document réel du runner
+  (`/api/workspaces/<id>/index.html`), avec le Web Bridge et une base jetable
+  initialisée depuis `desktop-schema.sql` ;
+- les échecs de flux sont renvoyés à l'agent dans la même session pour une
+  réparation ciblée (deux tentatives) ;
+- le résultat est stocké sur le projet et affiché dans la carte
+  **Qualité de l'application**, avec relance manuelle.
+
+La suite directe : utilisateurs et permissions dans l'application, puis
+staging cloud.

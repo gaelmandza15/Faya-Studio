@@ -145,6 +145,23 @@ Objectif : valider la plateforme dans des conditions réelles.
 
 Objectif : tenir la promesse « application liée, mise à jour, partagée ».
 
+### 3.6 Porte de qualité d'exécution — livrée
+
+- `acceptance.json` exécuté dans le document réel du runner, Web Bridge inclus ;
+- base jetable par exécution (`.faya/sandbox/`), donc aucune écriture dans les
+  données réelles ni dans le flux de synchronisation ;
+- échecs renvoyés à l'agent dans la même session, deux tentatives de réparation
+  maximum ;
+- résultat persisté sur le projet et affiché dans la carte **Qualité** de la
+  fiche application, avec relance manuelle ;
+- repli statique explicite si la plateforme est injoignable.
+
+Voir [`docs/acceptance.md`](acceptance.md). Limite : un échec après réparation
+ne bloque pas la génération, il est signalé.
+
+La suite de cette phase : utilisateurs et permissions au niveau de chaque
+application, puis mises à jour automatiques.
+
 ### 3.5 Sauvegardes et restauration — première version livrée
 
 - snapshot SQLite côté plateforme (`VACUUM INTO`) ;

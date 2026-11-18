@@ -9,7 +9,10 @@ import path from "node:path";
 import { chromium } from "@playwright/test";
 import {
   readAcceptancePlan,
+  type AcceptanceFlowResult,
   type AcceptanceLocator,
+  type AcceptanceMode,
+  type AcceptanceReport,
   type AcceptanceStep,
 } from "../src/engine/acceptance";
 import { getWorkspacesRoot } from "../src/engine/workspace";
@@ -102,19 +105,19 @@ async function runStep(
   switch (step.action) {
     case "click": {
       const locator = locatorFor(page, step.locator, step.exact);
-      await locator.first().waitFor({ state: "visible", timeout: 5000 });
+      await locator.first().waitFor({ state: "visible", timeout: 10000 });
       await locator.first().click();
       return;
     }
     case "fill": {
       const locator = locatorFor(page, step.locator);
-      await locator.first().waitFor({ state: "visible", timeout: 5000 });
+      await locator.first().waitFor({ state: "visible", timeout: 10000 });
       await locator.first().fill(step.value);
       return;
     }
     case "select": {
       const locator = locatorFor(page, step.locator);
-      await locator.first().waitFor({ state: "visible", timeout: 5000 });
+      await locator.first().waitFor({ state: "visible", timeout: 10000 });
       await locator.first().selectOption(step.value);
       return;
     }
@@ -123,13 +126,13 @@ async function runStep(
       return;
     case "expectText": {
       const locator = page.getByText(step.text, { exact: step.exact });
-      await locator.first().waitFor({ state: "visible", timeout: 5000 });
+      await locator.first().waitFor({ state: "visible", timeout: 10000 });
       return;
     }
     case "expectHidden": {
       const locator = page.getByText(step.text);
       if ((await locator.count()) > 0) {
-        await locator.first().waitFor({ state: "hidden", timeout: 5000 });
+        await locator.first().waitFor({ state: "hidden", timeout: 10000 });
       }
       return;
     }
@@ -142,23 +145,45 @@ async function runStep(
   }
 }
 
+async function writeReport(outPath: string, report: AcceptanceReport) {
+  await mkdir(path.dirname(outPath), { recursive: true });
+  await writeFile(outPath, JSON.stringify(report, null, 2), "utf8");
+}
+
 async function main() {
-  const projectId =
+  const projectArg =
     getArg("--project") ?? getArg("--workspace") ?? process.argv[2];
-  if (!projectId) {
+  if (!projectArg) {
     console.error("Usage: tsx scripts/run-acceptance.ts --project <id>");
     process.exitCode = 2;
     return;
   }
 
-  const direct = path.resolve(projectId);
+  // In platform mode --project is the project id used in the URL, while
+  // --workspace points to the generated files. Static mode accepts either.
+  const workspaceArg = getArg("--workspace") ?? projectArg;
+
+  const baseUrl = getArg("--base-url")?.replace(/\/+$/, "");
+  const mode: AcceptanceMode =
+    getArg("--mode") === "platform" || baseUrl ? "platform" : "static";
+  const token = getArg("--token") ?? process.env.FAYA_ACCEPTANCE_TOKEN;
+  const organizationId = getArg("--org");
+  const sandbox = getArg("--sandbox");
+
+  if (mode === "platform" && (!baseUrl || !token)) {
+    console.error("Platform mode needs --base-url and --token.");
+    process.exitCode = 2;
+    return;
+  }
+
+  const direct = path.resolve(workspaceArg);
   const directIsDir = await stat(direct)
     .then((info) => info.isDirectory())
     .catch(() => false);
   const root =
-    path.isAbsolute(projectId) || directIsDir
+    path.isAbsolute(workspaceArg) || directIsDir
       ? direct
-      : path.join(getWorkspacesRoot(), projectId);
+      : path.join(getWorkspacesRoot(), workspaceArg);
   const parsed = await readAcceptancePlan(root);
 
   if (!parsed.ok) {
@@ -169,26 +194,87 @@ async function main() {
     return;
   }
 
-  const server = await startServer(root);
-  const address = server.address();
-  const port =
-    typeof address === "object" && address ? address.port : 0;
-  const baseURL = `http://127.0.0.1:${port}`;
-  const browser = await chromium.launch({ headless: true });
-  const results: Array<{
-    name: string;
-    ok: boolean;
-    failedStep?: number;
-    error?: string;
-  }> = [];
+  const outPath = getArg("--out")
+    ? path.resolve(getArg("--out") as string)
+    : path.join(root, ".faya", "acceptance-results.json");
+
+  // Static mode serves the workspace over a throwaway HTTP server. Platform
+  // mode exercises the real Web Bridge and the project's SQLite database.
+  let server: http.Server | undefined;
+  let targetUrl: string;
+
+  if (mode === "platform") {
+    const sandboxParam = sandbox
+      ? `&_sandbox=${encodeURIComponent(sandbox)}`
+      : "";
+    targetUrl = `${baseUrl}/api/workspaces/${encodeURIComponent(
+      projectArg,
+    )}/index.html?_client=acceptance${sandboxParam}`;
+  } else {
+    server = await startServer(root);
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    targetUrl = `http://127.0.0.1:${port}`;
+  }
+
+  const results: AcceptanceFlowResult[] = [];
   const consoleErrors: string[] = [];
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (error) {
+    const report: AcceptanceReport = {
+      ok: false,
+      generatedAt: new Date().toISOString(),
+      mode,
+      baseUrl,
+      flows: [],
+      consoleErrors: [],
+      error: `Chromium is unavailable: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+    await writeReport(outPath, report);
+    console.log(JSON.stringify(report, null, 2));
+    if (server) await new Promise<void>((resolve) => server?.close(() => resolve()));
+    process.exitCode = 4;
+    return;
+  }
 
   try {
     for (const flow of parsed.plan.flows) {
+      const startedAt = Date.now();
       const context = await browser.newContext({
         viewport: { width: 1280, height: 800 },
       });
+
+      if (mode === "platform" && token && baseUrl) {
+        const cookies = [
+          {
+            name: "faya_session",
+            value: token,
+            url: baseUrl,
+            httpOnly: true,
+            sameSite: "Lax" as const,
+          },
+        ];
+
+        if (organizationId) {
+          cookies.push({
+            name: "faya_org",
+            value: organizationId,
+            url: baseUrl,
+            httpOnly: false,
+            sameSite: "Lax" as const,
+          });
+        }
+
+        await context.addCookies(cookies);
+      }
+
       const page = await context.newPage();
+      let failedStep: number | undefined;
 
       page.on("pageerror", (error) =>
         consoleErrors.push(`${flow.name}: ${error.message}`),
@@ -203,16 +289,30 @@ async function main() {
       });
 
       try {
-        await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+        if (mode === "platform") {
+          await page
+            .waitForLoadState("networkidle", { timeout: 8000 })
+            .catch(() => undefined);
+        }
+
         for (let index = 0; index < flow.steps.length; index += 1) {
+          failedStep = index + 1;
           await runStep(page, flow.steps[index]);
         }
-        results.push({ name: flow.name, ok: true });
+        failedStep = undefined;
+        results.push({
+          name: flow.name,
+          ok: true,
+          durationMs: Date.now() - startedAt,
+        });
       } catch (error) {
         results.push({
           name: flow.name,
           ok: false,
+          failedStep,
           error: error instanceof Error ? error.message : String(error),
+          durationMs: Date.now() - startedAt,
         });
       } finally {
         await context.close();
@@ -220,24 +320,19 @@ async function main() {
     }
   } finally {
     await browser.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (server) await new Promise<void>((resolve) => server?.close(() => resolve()));
   }
 
-  const report = {
+  const report: AcceptanceReport = {
     ok: results.every((flow) => flow.ok),
     generatedAt: new Date().toISOString(),
+    mode,
+    baseUrl,
     flows: results,
     consoleErrors: consoleErrors.slice(0, 20),
   };
 
-  const fayaDir = path.join(root, ".faya");
-  await mkdir(fayaDir, { recursive: true });
-  await writeFile(
-    path.join(fayaDir, "acceptance-results.json"),
-    JSON.stringify(report, null, 2),
-    "utf8",
-  );
-
+  await writeReport(outPath, report);
   console.log(JSON.stringify(report, null, 2));
   if (!report.ok) process.exitCode = 1;
 }

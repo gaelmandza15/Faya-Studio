@@ -297,6 +297,32 @@ export const fr = {
         "Vous pouvez consulter les sauvegardes, mais pas les gérer.",
       error: "L'opération a échoué. Réessayez.",
     },
+    quality: {
+      section: "Qualité de l'application",
+      hint:
+        "Les parcours critiques sont rejoués automatiquement dans un navigateur, avec la vraie base de données de l'application.",
+      statusPassed: "Validée",
+      statusFailed: "Échec",
+      statusSkipped: "Non exécutée",
+      statusPending: "En attente",
+      flows: "{passed}/{total} flux validés",
+      failedFlows: "Flux en échec",
+      consoleErrors: "Erreurs console",
+      lastRun: "Dernier contrôle {time}",
+      never: "Aucun contrôle exécuté",
+      rerun: "Relancer les tests",
+      running: "Exécution…",
+      staticMode:
+        "Validation statique : la plateforme était injoignable, le Web Bridge n'a pas été exercé.",
+      noPlan: "Aucun plan d'acceptation dans cette application.",
+      step: "Étape {step}",
+      viewerHint:
+        "Vous pouvez consulter le résultat, mais pas relancer les tests.",
+      busy: "Une génération est en cours. Réessayez ensuite.",
+      notReady:
+        "L'application doit être prête avant de relancer les tests.",
+      error: "Le contrôle a échoué. Réessayez.",
+    },
     connections: {
       section: "Connexions externes",
       hint:

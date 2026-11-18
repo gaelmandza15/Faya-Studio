@@ -52,21 +52,30 @@ const PRESERVE = [
 ];
 
 const ACCEPTANCE_CONTRACT = `ACCEPTANCE PLAN
-Write acceptance.json at the workspace root. It is validated and executed with Playwright; keep it small and semantic.
+Write acceptance.json at the workspace root. It is validated and executed with Playwright in the real application, against its real database. A failing flow comes back to you as a repair request.
 - 2 to 4 flows maximum, 25 steps maximum per flow.
-- Use accessible roles, labels, placeholders or visible text from your UI. Do not use generated CSS ids.
-- Cover the critical workflows you just built: create, edit, delete, search, filter, open a panel.
-- Do not include external network calls, payments or destructive system actions.
+- Use accessible roles, labels, placeholders or visible text from your UI. Do not use generated CSS ids or positional selectors.
+- Locators must match exactly one element. Prefer the same words the user sees.
+- Verify the final state, not a transient toast: assert a row, a count or a panel that stays after the action.
+
+Cover the critical workflows you just built:
+- create an item, then verify it appears and the form/panel closes if it should;
+- search or filter, and verify the result count changes;
+- edit or toggle an item, and verify the updated value;
+- delete with confirmation, and verify the item is gone;
+- describe what the user sees when no result matches (empty state);
+- reload the page after a write and verify the data persisted.
 
 Format:
 {"version":1,"flows":[{"name":"Créer un élément","steps":[
   {"action":"click","locator":{"role":"button","name":"Nouveau"}},
   {"action":"fill","locator":{"label":"Nom"},"value":"Test"},
   {"action":"click","locator":{"role":"button","name":"Enregistrer"}},
+  {"action":"expectHidden","text":"Nouvel élément"},
   {"action":"expectText","text":"Test"}
 ]}]}
 
-Allowed actions: click, fill, select, press, expectText, expectHidden, reload, wait.`;
+Allowed actions: click, fill, select, press, expectText, expectHidden, reload, wait. Use wait only for a real animation; otherwise assert visible text.`;
 
 export const TARGET_FRAMES: Record<GenerationTarget, TargetFrame> = {
   web: {

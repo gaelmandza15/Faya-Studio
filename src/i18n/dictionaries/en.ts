@@ -294,6 +294,30 @@ export const en: Dictionary = {
       viewerHint: "You can view backups, but not manage them.",
       error: "The operation failed. Try again.",
     },
+    quality: {
+      section: "Application quality",
+      hint:
+        "Critical user journeys are replayed automatically in a browser, against the application's real database.",
+      statusPassed: "Passed",
+      statusFailed: "Failed",
+      statusSkipped: "Not run",
+      statusPending: "Pending",
+      flows: "{passed}/{total} flows passed",
+      failedFlows: "Failed flows",
+      consoleErrors: "Console errors",
+      lastRun: "Last check {time}",
+      never: "No check has run yet",
+      rerun: "Rerun checks",
+      running: "Running…",
+      staticMode:
+        "Static validation: the platform was unreachable, so the Web Bridge was not exercised.",
+      noPlan: "This application has no acceptance plan.",
+      step: "Step {step}",
+      viewerHint: "You can view the result, but not rerun the checks.",
+      busy: "A generation is running. Try again afterwards.",
+      notReady: "The application must be ready before running checks.",
+      error: "The check failed. Try again.",
+    },
     connections: {
       section: "External connections",
       hint:

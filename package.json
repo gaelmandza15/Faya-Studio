@@ -22,6 +22,7 @@
     "sync:verify-runtime": "tsx scripts/verify-app-link-runtime.ts",
     "ui:audit": "tsx scripts/ui-quality-audit.ts",
     "acceptance": "tsx scripts/run-acceptance.ts",
+    "acceptance:gate": "tsx scripts/verify-acceptance-gate.ts",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:report": "playwright show-report .e2e/report",

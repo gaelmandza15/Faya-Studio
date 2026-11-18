@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { gotoInteractive } from "./helpers";
 import { readE2eState } from "./state";
 
 test.describe("Backups", () => {
@@ -18,9 +19,7 @@ test.describe("Backups", () => {
     ).toHaveCount(1);
     await expect(frame.locator("#task-count")).toHaveText("4");
 
-    await page.goto(`/applications/${backupProjectId}`, {
-      waitUntil: "domcontentloaded",
-    });
+    await gotoInteractive(page, `/applications/${backupProjectId}`);
     await expect(
       page.getByRole("heading", { name: "E2E Backup" }),
     ).toBeVisible();
@@ -46,9 +45,7 @@ test.describe("Backups", () => {
       .click();
     await expect(updated.locator("#task-count")).toHaveText("3");
 
-    await page.goto(`/applications/${backupProjectId}`, {
-      waitUntil: "domcontentloaded",
-    });
+    await gotoInteractive(page, `/applications/${backupProjectId}`);
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Restaurer" }).click();
     await expect(page.getByText("Sauvegarde restaurée.")).toBeVisible();

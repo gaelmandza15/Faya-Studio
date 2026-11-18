@@ -106,6 +106,13 @@ model Project {
   syncDevices     SyncDevice[]
   webhooks        WebhookEndpoint[]
   backups         ProjectBackup[]
+  acceptanceStatus String?
+  acceptancePassed Int               @default(0)
+  acceptanceTotal  Int               @default(0)
+  acceptanceFailed Int               @default(0)
+  acceptanceRunAt  DateTime?
+  acceptanceError  String?
+  acceptanceReport String?
 
   @@index([organizationId, lastActivityAt])
 }

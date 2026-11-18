@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { gotoInteractive } from "./helpers";
 import { readE2eState } from "./state";
 
 test.describe("Mobile", () => {
@@ -7,7 +8,7 @@ test.describe("Mobile", () => {
   }) => {
     const { projectId } = readE2eState();
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await gotoInteractive(page, "/");
     await page.getByRole("button", { name: "Ouvrir le menu" }).tap();
 
     const dialog = page.getByRole("dialog", { name: "Menu de navigation" });

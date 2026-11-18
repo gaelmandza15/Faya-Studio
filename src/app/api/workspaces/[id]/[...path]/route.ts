@@ -77,17 +77,21 @@ export async function GET(
   if (typeof window.__TAURI_INTERNALS__ !== 'undefined' &&
       typeof window.__TAURI_INTERNALS__.invoke === 'function') return;
   const PROJECT_ID = ${JSON.stringify(id)};
-  const CLIENT_ID = new URLSearchParams(window.location.search).get('_client') || 'web';
+  const params = new URLSearchParams(window.location.search);
+  const CLIENT_ID = params.get('_client') || 'web';
+  const SANDBOX = params.get('_sandbox') || '';
   const invoke = async function(cmd, args) {
     if (cmd !== 'db_select' && cmd !== 'db_execute') {
       throw new Error('Commande non supportée sur le Web Bridge : ' + cmd);
     }
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Faya-Client': CLIENT_ID
+    };
+    if (SANDBOX) headers['X-Faya-Sandbox'] = SANDBOX;
     const res = await fetch('/api/projects/' + PROJECT_ID + '/db', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Faya-Client': CLIENT_ID
-      },
+      headers: headers,
       credentials: 'same-origin',
       body: JSON.stringify({
         cmd: cmd,
@@ -119,7 +123,15 @@ export async function GET(
       // The app may only reach its own data endpoint. Keeping connect-src
       // narrower than 'self' stops generated code from calling other
       // platform APIs with the user's session.
-      const origin = new URL(request.url).origin;
+      // Use the origin the browser actually used. `request.url` can be
+      // normalized to localhost by the dev server, which then blocks the
+      // bridge when the page is opened through 127.0.0.1 or another host.
+      const origin = `${
+        request.headers.get("x-forwarded-proto") ??
+        new URL(request.url).protocol.replace(":", "")
+      }://${
+        request.headers.get("host") ?? new URL(request.url).host
+      }`;
       headers["Content-Security-Policy"] =
         `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src ${origin}/api/projects/${id}/db; form-action 'none'; base-uri 'none'`;
     }

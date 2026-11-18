@@ -4,13 +4,20 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { createWriteStream } from "node:fs";
-import { spawn } from "node:child_process";
 import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { generateApp, type EngineEvent } from "../src/engine/pi-engine";
 import { getWorkspacesRoot } from "../src/engine/workspace";
 import { refundCredits } from "../src/engine/credits";
+import {
+  buildAcceptanceRecord,
+  type AcceptanceOutcome,
+} from "../src/engine/acceptance";
+import {
+  runProjectAcceptance,
+  saveAcceptanceRecord,
+} from "../src/engine/acceptance-service";
 import { CREDIT_REFUND_REASONS } from "../src/lib/credit-costs";
 import { logger } from "../src/lib/logger";
 import {
@@ -60,63 +67,25 @@ async function isFile(pathname: string): Promise<boolean> {
   }
 }
 
-async function runAcceptance(
-  projectId: string,
-  log: ReturnType<typeof logger.child>,
-) {
-  if (process.env.FAYA_RUN_ACCEPTANCE === "0") {
-    log.info("Acceptance runner disabled");
-    return;
+function acceptanceMessage(outcome: AcceptanceOutcome): string | null {
+  if (outcome.status !== "failed") return null;
+
+  const failed = outcome.report.flows.filter((flow) => !flow.ok);
+  const lines = [
+    `Contrôle qualité automatique : ${failed.length}/${outcome.report.flows.length} flux en échec.`,
+  ];
+
+  for (const flow of failed) {
+    const step =
+      typeof flow.failedStep === "number" ? ` (étape ${flow.failedStep})` : "";
+    lines.push(`- ${flow.name}${step} : ${flow.error ?? "échec inconnu"}`);
   }
 
-  const tsxCli = path.join(
-    process.cwd(),
-    "node_modules",
-    "tsx",
-    "dist",
-    "cli.mjs",
+  lines.push(
+    "L'application reste utilisable, mais ces parcours doivent être corrigés.",
   );
-  const script = path.join(process.cwd(), "scripts", "run-acceptance.ts");
 
-  try {
-    const child = spawn(
-      process.execPath,
-      [tsxCli, script, "--project", projectId],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    let output = "";
-    child.stdout?.on("data", (chunk) => {
-      output += String(chunk);
-    });
-    child.stderr?.on("data", (chunk) => {
-      output += String(chunk);
-    });
-
-    const timer = setTimeout(() => {
-      child.kill();
-    }, 3 * 60 * 1000);
-
-    const exitCode = await new Promise<number | null>((resolve) => {
-      child.on("error", () => resolve(null));
-      child.on("close", (code) => resolve(code));
-    });
-
-    clearTimeout(timer);
-    log.info("Acceptance finished", {
-      exitCode,
-      output: output.slice(-1500),
-    });
-  } catch (error) {
-    log.warn("Acceptance runner failed to start", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  return lines.join("\n");
 }
 
 async function main() {
@@ -258,12 +227,68 @@ async function main() {
       throw new Error("Missing modification instruction.");
     }
 
+    const acceptanceEnabled = process.env.FAYA_RUN_ACCEPTANCE !== "0";
+    const acceptanceUserId =
+      project.createdById ??
+      (
+        await prisma.membership.findFirst({
+          where: { organizationId: project.organizationId },
+          select: { userId: true },
+          orderBy: { createdAt: "asc" },
+        })
+      )?.userId ??
+      null;
+
+    const acceptance =
+      acceptanceEnabled && acceptanceUserId
+        ? async (): Promise<AcceptanceOutcome> => {
+            const run = await runProjectAcceptance({
+              prisma,
+              projectId,
+              organizationId: project.organizationId,
+              userId: acceptanceUserId,
+              workspaceDir,
+              onLog: (message, details) => log.info(message, details),
+            });
+
+            if (run.warning) {
+              log.warn("Acceptance degraded to static mode", {
+                reason: run.warning,
+              });
+            }
+
+            try {
+              await saveAcceptanceRecord(prisma, projectId, run.record);
+            } catch (error) {
+              log.error("Failed to save the acceptance result", {
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+
+            return run.outcome;
+          }
+        : undefined;
+
+    if (!acceptance) {
+      await saveAcceptanceRecord(
+        prisma,
+        projectId,
+        buildAcceptanceRecord({
+          status: "skipped",
+          reason: acceptanceEnabled
+            ? "no-acceptance-user"
+            : "acceptance-disabled",
+        }),
+      ).catch(() => undefined);
+    }
+
     const result = await generateApp({
       prompt: mode === "modify" ? instruction : project.prompt,
       context: project.prompt,
       workspaceDir,
       target,
       mode,
+      acceptance,
       onEvent(event) {
         try {
           eventsStream.write(`${JSON.stringify(sanitize(event))}\n`);
@@ -283,8 +308,10 @@ async function main() {
     }
 
     if (result.ok) {
-      await runAcceptance(projectId, log);
       const summary = result.summary.trim();
+      const qualityNote = result.acceptance
+        ? acceptanceMessage(result.acceptance)
+        : null;
 
       try {
         await createProjectVersion(prisma, projectId, {
@@ -298,14 +325,16 @@ async function main() {
         });
       }
 
-      if (summary) {
+      if (summary || qualityNote) {
         await prisma.projectMessage
           .create({
             data: {
               projectId,
               jobId,
               role: "agent",
-              content: summary.slice(0, 4000),
+              content: [summary.slice(0, 3600), qualityNote]
+                .filter(Boolean)
+                .join("\n\n"),
             },
           })
           .catch(() => undefined);

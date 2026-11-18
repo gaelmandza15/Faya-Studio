@@ -18,7 +18,9 @@ import {
 import { AppLinkCard } from "@/components/applications/app-link-card";
 import { BackupsCard } from "@/components/applications/backups-card";
 import { ConnectionsCard } from "@/components/applications/connections-card";
+import { QualityCard } from "@/components/applications/quality-card";
 import { ProjectGlyph } from "@/components/dashboard/glyphs";
+import { parseStoredAcceptanceReport } from "@/engine/acceptance";
 import { formatDate, formatRelativeTime } from "@/i18n/format";
 import { getI18n } from "@/i18n/server";
 import { db } from "@/lib/db";
@@ -175,6 +177,9 @@ export default async function ApplicationDetailPage({
   const latestVersion = project.versions[0];
   const targetLabel =
     project.target === "web" ? "Web" : dict.common.desktop;
+  const acceptanceReport = parseStoredAcceptanceReport(
+    project.acceptanceReport,
+  );
 
   const stats = [
     {
@@ -603,6 +608,28 @@ export default async function ApplicationDetailPage({
         </div>
 
         <div className="mt-5 space-y-5">
+          <QualityCard
+            projectId={project.id}
+            canManage={canManage}
+            appStatus={project.status}
+            status={project.acceptanceStatus}
+            passed={project.acceptancePassed}
+            total={project.acceptanceTotal}
+            failed={project.acceptanceFailed}
+            runAt={project.acceptanceRunAt?.toISOString() ?? null}
+            error={project.acceptanceError}
+            mode={acceptanceReport?.mode ?? null}
+            flows={
+              acceptanceReport?.flows.map((flow) => ({
+                name: flow.name,
+                ok: flow.ok,
+                failedStep: flow.failedStep,
+                error: flow.error,
+              })) ?? []
+            }
+            consoleErrors={acceptanceReport?.consoleErrors ?? []}
+          />
+
           <BackupsCard
             projectId={project.id}
             syncEnabled={project.syncEnabled}

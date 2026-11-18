@@ -1,21 +1,20 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Locale } from "@/i18n/config";
 import { db } from "@/lib/db";
+import {
+  generateSessionToken,
+  hashSessionToken,
+  SESSION_TTL_MS,
+} from "@/lib/auth/tokens";
 
 const SESSION_COOKIE = "faya_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 export async function createSession(userId: string) {
-  const token = randomBytes(32).toString("base64url");
-  const tokenHash = hashToken(token);
+  const token = generateSessionToken();
+  const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
   await db.session.deleteMany({
@@ -43,7 +42,7 @@ export async function getSession() {
   if (!token) return null;
 
   const session = await db.session.findUnique({
-    where: { tokenHash: hashToken(token) },
+    where: { tokenHash: hashSessionToken(token) },
     include: { user: true },
   });
 
@@ -75,7 +74,7 @@ export async function destroySession() {
 
   if (token) {
     await db.session
-      .deleteMany({ where: { tokenHash: hashToken(token) } })
+      .deleteMany({ where: { tokenHash: hashSessionToken(token) } })
       .catch(() => undefined);
   }
 

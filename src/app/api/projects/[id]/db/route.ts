@@ -9,6 +9,7 @@ import { logger } from "@/lib/logger";
 import {
   diffSnapshots,
   getProjectDataProvider,
+  SANDBOX_ID_PATTERN,
 } from "@/engine/project-db";
 import { applyChangesInTx } from "@/engine/sync-store";
 import { broadcastProjectUpdate } from "@/lib/project-events";
@@ -43,6 +44,16 @@ export async function POST(
 
   const clientId =
     request.headers.get("x-faya-client")?.slice(0, 64) || undefined;
+
+  // Acceptance runs write into a throwaway database seeded from the schema,
+  // never into the application's live data.
+  const sandboxHeader =
+    request.headers.get("x-faya-sandbox") ??
+    new URL(request.url).searchParams.get("sandbox");
+  const sandbox =
+    sandboxHeader && SANDBOX_ID_PATTERN.test(sandboxHeader)
+      ? sandboxHeader
+      : undefined;
 
   // Rate limiting: 180 requests per minute per user/session
   const limiter = rateLimit(`db:${session.userId}`, {
@@ -148,7 +159,7 @@ export async function POST(
   log.debug("DB request", { cmd, kind: inspection.kind });
 
   try {
-    const data = await getProjectDataProvider(projectId);
+    const data = await getProjectDataProvider(projectId, { sandbox });
 
     if (cmd === "db_select") {
       const rows = await data.select(query, boundParams);
@@ -157,15 +168,16 @@ export async function POST(
     }
 
     const target = inspection.target;
+    const syncEligible = project.syncEnabled && !sandbox;
     const before =
-      project.syncEnabled && target
+      syncEligible && target
         ? await data.snapshot(target.table)
         : null;
 
     const info = await data.execute(query, boundParams);
 
     // Web writes must reach desktop devices through the same sync stream.
-    if (project.syncEnabled && target && before) {
+    if (syncEligible && target && before) {
       try {
         const after = await data.snapshot(target.table);
 
