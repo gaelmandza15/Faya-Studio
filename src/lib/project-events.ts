@@ -24,17 +24,12 @@ export interface ProjectEventBus {
 
 const globalForEvents = globalThis as unknown as {
   __fayaProjectListeners?: Map<string, Set<ProjectEventListener>>;
-  __fayaProjectSlots?: Map<string, number>;
   __fayaProjectEventBus?: ProjectEventBus;
 };
 
 const projectListeners: Map<string, Set<ProjectEventListener>> =
   globalForEvents.__fayaProjectListeners ??
   (globalForEvents.__fayaProjectListeners = new Map());
-
-const projectSlots: Map<string, number> =
-  globalForEvents.__fayaProjectSlots ??
-  (globalForEvents.__fayaProjectSlots = new Map());
 
 class MemoryProjectEventBus implements ProjectEventBus {
   subscribe(projectId: string, listener: ProjectEventListener): () => void {
@@ -103,27 +98,4 @@ export function broadcastProjectUpdate(
   payload: ProjectEventPayload,
 ) {
   getProjectEventBus().broadcast(projectId, payload);
-}
-
-/**
- * Per-user/project SSE connection slots. Kept process-local; a multi-instance
- * deployment would move this to a shared counter.
- */
-export function acquireProjectSlot(key: string, max = 5): boolean {
-  const current = projectSlots.get(key) ?? 0;
-
-  if (current >= max) return false;
-
-  projectSlots.set(key, current + 1);
-  return true;
-}
-
-export function releaseProjectSlot(key: string) {
-  const current = projectSlots.get(key) ?? 0;
-
-  if (current <= 1) {
-    projectSlots.delete(key);
-  } else {
-    projectSlots.set(key, current - 1);
-  }
 }

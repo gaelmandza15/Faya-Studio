@@ -1,10 +1,10 @@
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { assertWorkspaceId } from "@/engine/workspace";
-import { subscribeProject, acquireProjectSlot, releaseProjectSlot } from "@/lib/project-events";
+import { subscribeProject } from "@/lib/project-events";
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
@@ -42,24 +42,6 @@ export async function GET(
     return new Response("Forbidden", { status: 403 });
   }
 
-  const slotKey = `${projectId}:${session.userId}`;
-
-  if (!acquireProjectSlot(slotKey, 5)) {
-    return new Response("Too many connections", {
-      status: 429,
-      headers: { "Retry-After": "30" },
-    });
-  }
-
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    releaseProjectSlot(slotKey);
-  };
-
-  request.signal.addEventListener("abort", release);
-
   let cleanup: (() => void) | undefined;
 
   const stream = new ReadableStream({
@@ -83,12 +65,10 @@ export async function GET(
       cleanup = () => {
         clearInterval(interval);
         unsubscribe();
-        release();
       };
     },
     cancel() {
       cleanup?.();
-      release();
     },
   });
 

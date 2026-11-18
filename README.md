@@ -14,6 +14,11 @@ La suite du développement (abstractions, staging cloud sans Docker, cycle de
 vie des applications) est planifiée dans
 [`docs/roadmap.md`](docs/roadmap.md).
 
+La chaîne de valeur réelle a été testée sur un projet neuf : génération IA,
+exécution web, lecture/écriture SQLite, export CSV, modification par
+conversation et version 2. Résultats, bugs trouvés et corrections :
+[`docs/core-validation.md`](docs/core-validation.md).
+
 ## Démarrage
 
 ```bash

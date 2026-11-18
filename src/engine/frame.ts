@@ -34,6 +34,9 @@ const QUALITY = [
   "Deliver the requested workflows with real interactions and realistic sample data.",
   "Handle empty, loading and error states; make controls accessible; confirm destructive actions.",
   "Persistence must survive reloads.",
+  "Keep the app runnable at every step: every referenced file must exist and every script must be included.",
+  "If the implementation is large, split JavaScript into a few coherent modules and include all of them in index.html; never leave a partial or unreferenced file.",
+  "Call run_checks and fix every reported error before finish; a referenced file that was never written is a failure, not a detail.",
   "Stay focused on the requested workflows; avoid unrelated features.",
   "Verify the app before finishing, then summarize what you built.",
 ];

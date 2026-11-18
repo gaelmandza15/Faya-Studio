@@ -351,9 +351,22 @@ export async function validateWorkspace(
 
   try {
     const uiFindings = await auditUiQuality(root);
+    const blockers = uiFindings.filter(
+      (item) => item.severity === "blocker",
+    );
+    const warnings = uiFindings.filter(
+      (item) => item.severity !== "blocker",
+    );
+
+    if (blockers.length > 0) {
+      errors.push(...formatUiFindings(blockers));
+    }
+
+    if (warnings.length > 0) {
+      notes.push(...formatUiFindings(warnings));
+    }
 
     if (uiFindings.length > 0) {
-      notes.push(...formatUiFindings(uiFindings));
       notes.push(
         "UI QUALITY: fix the structural findings above, then complete the interaction checklist from the system prompt.",
       );

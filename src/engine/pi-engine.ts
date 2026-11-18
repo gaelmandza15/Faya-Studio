@@ -53,6 +53,35 @@ function getDeepSeekKey(): string {
   return key;
 }
 
+function firstCheckError(report: string): string {
+  const lines = report
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line &&
+        !line.startsWith("CHECK") &&
+        !line.startsWith("JS syntax OK") &&
+        !line.startsWith("SQLite") &&
+        !line.startsWith("UI QUALITY") &&
+        !line.startsWith("Files:") &&
+        !line.startsWith("- "),
+    );
+
+  return lines.slice(0, 3).join(" ") || report.slice(0, 500);
+}
+
+function getEngineTimeoutMs(mode: "generate" | "modify"): number {
+  const configured = Number(process.env.FAYA_ENGINE_TIMEOUT_MS ?? "");
+
+  if (Number.isFinite(configured) && configured > 0) {
+    return configured;
+  }
+
+  // Complex business apps can legitimately take more than ten minutes.
+  return mode === "modify" ? 15 * 60 * 1000 : 25 * 60 * 1000;
+}
+
 export async function generateApp({
   prompt,
   workspaceDir,
@@ -60,7 +89,7 @@ export async function generateApp({
   target = "desktop",
   mode = "generate",
   context,
-  timeoutMs = 10 * 60 * 1000,
+  timeoutMs,
 }: {
   prompt: string;
   workspaceDir: string;
@@ -70,6 +99,7 @@ export async function generateApp({
   context?: string;
   timeoutMs?: number;
 }): Promise<GenerationResult> {
+  const effectiveTimeoutMs = timeoutMs ?? getEngineTimeoutMs(mode);
   const emit = (event: EngineEvent) => {
     try {
       onEvent?.(event);
@@ -190,7 +220,7 @@ export async function generateApp({
     timeout = setTimeout(() => {
       timedOut = true;
       void session?.abort();
-    }, timeoutMs);
+    }, effectiveTimeoutMs);
 
     const agentPrompt =
       mode === "modify"
@@ -201,10 +231,42 @@ export async function generateApp({
 
     await session.prompt(agentPrompt);
 
-    const summary =
+    let summary =
       finishSummary || session.getLastAssistantText()?.trim() || "";
+    let check = await validateWorkspace(workspaceDir, { target });
+
+    // The agent sometimes stops before every referenced file is written.
+    // Feed the validator report back and ask for a targeted repair before
+    // failing the whole job.
+    let repairAttempt = 0;
+
+    while (!check.ok && !timedOut && repairAttempt < 2) {
+      repairAttempt += 1;
+      emit({
+        type: "status",
+        status: "generating",
+        message: `Validation failed — repair attempt ${repairAttempt}.`,
+      });
+
+      try {
+        await session.prompt(
+          [
+            "The workspace validation failed. Fix every error below, create any missing referenced file, and keep index.html consistent.",
+            "Then call run_checks again. Do not call finish until run_checks passes.",
+            "",
+            check.report,
+          ].join("\n"),
+        );
+      } catch {
+        break;
+      }
+
+      summary =
+        finishSummary || session.getLastAssistantText()?.trim() || summary;
+      check = await validateWorkspace(workspaceDir, { target });
+    }
+
     const files = await listWorkspaceFiles(workspaceDir, 6);
-    const check = await validateWorkspace(workspaceDir, { target });
 
     if (timedOut) {
       const error = "Generation timed out.";
@@ -219,10 +281,23 @@ export async function generateApp({
       };
     }
 
+    if (!check.ok) {
+      const error = `Validation failed: ${firstCheckError(check.report)}`;
+      emit({ type: "error", message: error });
+      return {
+        ok: false,
+        summary,
+        workspaceDir,
+        files,
+        checkReport: check.report,
+        error,
+      };
+    }
+
     emit({ type: "status", status: "done" });
 
     return {
-      ok: check.ok,
+      ok: true,
       summary,
       workspaceDir,
       files,

@@ -191,6 +191,64 @@ function auditCss(css: string, file: string): UiAuditFinding[] {
   return findings;
 }
 
+function auditBindings(html: string, js: string): UiAuditFinding[] {
+  const findings: UiAuditFinding[] = [];
+  const sources = `${html}\n${js}`;
+
+  const names = new Set(
+    Array.from(sources.matchAll(/\bname\s*=\s*["']([^"']+)["']/gi)).map(
+      (match) => match[1],
+    ),
+  );
+  const ids = new Set(
+    Array.from(sources.matchAll(/\bid\s*=\s*["']([^"']+)["']/gi)).map(
+      (match) => match[1],
+    ),
+  );
+
+  const checkedNames = new Set<string>();
+
+  for (const match of js.matchAll(
+    /\.elements\s*\.\s*([A-Za-z_$][\w$]*)/g,
+  )) {
+    const name = match[1];
+
+    if (checkedNames.has(name) || names.has(name)) continue;
+    checkedNames.add(name);
+
+    findings.push(
+      finding(
+        "form-field-name",
+        "major",
+        "(workspace)",
+        `JavaScript reads form.elements.${name}, but no field has name="${name}". Verify the form markup; dynamic templates can produce false positives.`,
+      ),
+    );
+  }
+
+  const checkedIds = new Set<string>();
+
+  for (const match of js.matchAll(
+    /getElementById\s*\(\s*["']([^"']+)["']\s*\)/g,
+  )) {
+    const id = match[1];
+
+    if (checkedIds.has(id) || ids.has(id)) continue;
+    checkedIds.add(id);
+
+    findings.push(
+      finding(
+        "missing-element-id",
+        "major",
+        "(workspace)",
+        `getElementById("${id}") has no matching id in the HTML or generated templates.`,
+      ),
+    );
+  }
+
+  return findings;
+}
+
 /**
  * Static, high-signal UI quality audit. It cannot click through the app, but it
  * catches structural mistakes that cause the most common finishing bugs.
@@ -198,6 +256,8 @@ function auditCss(css: string, file: string): UiAuditFinding[] {
 export async function auditUiQuality(root: string): Promise<UiAuditFinding[]> {
   const files = await listWorkspaceFiles(root, 6);
   const findings: UiAuditFinding[] = [];
+  let htmlSources = "";
+  let jsSources = "";
 
   for (const file of files) {
     if (!TEXT_FILE.test(file.path) || file.size > MAX_FILE_BYTES) continue;
@@ -208,11 +268,16 @@ export async function auditUiQuality(root: string): Promise<UiAuditFinding[]> {
     if (!content) continue;
 
     if (/\.html$/i.test(file.path)) {
+      htmlSources += `\n${content}`;
       findings.push(...auditHtml(content, file.path));
     } else if (/\.css$/i.test(file.path)) {
       findings.push(...auditCss(content, file.path));
+    } else {
+      jsSources += `\n${content}`;
     }
   }
+
+  findings.push(...auditBindings(htmlSources, jsSources));
 
   return findings.slice(0, 40);
 }
