@@ -307,6 +307,54 @@ async function main() {
         prompt.includes("The badge count is derived from unread items"),
     );
 
+    await writeFile(
+      path.join(workspace.dir, "index.html"),
+      VALID_HTML,
+      "utf8",
+    );
+    await rm(path.join(workspace.dir, "bad.js"), { force: true });
+    await rm(path.join(workspace.dir, "broken.html"), { force: true });
+    const withoutPlan = await validateWorkspace(workspace.dir, {
+      requireAcceptance: true,
+    });
+    check(
+      "une génération sans acceptance.json est refusée",
+      !withoutPlan.ok &&
+        withoutPlan.report.includes("acceptance.json is missing"),
+    );
+
+    await writeFile(
+      path.join(workspace.dir, "acceptance.json"),
+      JSON.stringify({
+        version: 1,
+        flows: [
+          {
+            name: "Créer une tâche",
+            steps: [
+              {
+                action: "fill",
+                locator: { label: "Titre" },
+                value: "Test",
+              },
+              {
+                action: "click",
+                locator: { role: "button", name: "Ajouter" },
+              },
+              { action: "expectText", text: "Test" },
+            ],
+          },
+        ],
+      }),
+      "utf8",
+    );
+    const withPlan = await validateWorkspace(workspace.dir, {
+      requireAcceptance: true,
+    });
+    check(
+      "un plan d'acceptation valide est accepté",
+      withPlan.ok && withPlan.report.includes("ACCEPTANCE: 1 flow"),
+    );
+
     console.log(
       `\n${failures === 0 ? "Selftest réussi." : `${failures} échec(s).`}`,
     );

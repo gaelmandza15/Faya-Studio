@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "flows": [
+    {
+      "name": "Créer une tâche",
+      "steps": [
+        {
+          "action": "fill",
+          "locator": { "label": "Nouvelle tâche" },
+          "value": "Acceptance Test"
+        },
+        {
+          "action": "click",
+          "locator": { "role": "button", "name": "Ajouter" }
+        },
+        {
+          "action": "expectText",
+          "text": "Acceptance Test"
+        }
+      ]
+    }
+  ]
+}

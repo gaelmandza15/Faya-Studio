@@ -25,6 +25,9 @@
 # generated application workspaces
 /workspaces/
 
+# internal application state (acceptance results, local DB)
+**/.faya/
+
 # Playwright
 /.e2e/
 /playwright-report/

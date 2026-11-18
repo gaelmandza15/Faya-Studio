@@ -4,6 +4,7 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { createWriteStream } from "node:fs";
+import { spawn } from "node:child_process";
 import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -56,6 +57,65 @@ async function isFile(pathname: string): Promise<boolean> {
     return info.isFile();
   } catch {
     return false;
+  }
+}
+
+async function runAcceptance(
+  projectId: string,
+  log: ReturnType<typeof logger.child>,
+) {
+  if (process.env.FAYA_RUN_ACCEPTANCE === "0") {
+    log.info("Acceptance runner disabled");
+    return;
+  }
+
+  const tsxCli = path.join(
+    process.cwd(),
+    "node_modules",
+    "tsx",
+    "dist",
+    "cli.mjs",
+  );
+  const script = path.join(process.cwd(), "scripts", "run-acceptance.ts");
+
+  try {
+    const child = spawn(
+      process.execPath,
+      [tsxCli, script, "--project", projectId],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    let output = "";
+    child.stdout?.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      output += String(chunk);
+    });
+
+    const timer = setTimeout(() => {
+      child.kill();
+    }, 3 * 60 * 1000);
+
+    const exitCode = await new Promise<number | null>((resolve) => {
+      child.on("error", () => resolve(null));
+      child.on("close", (code) => resolve(code));
+    });
+
+    clearTimeout(timer);
+    log.info("Acceptance finished", {
+      exitCode,
+      output: output.slice(-1500),
+    });
+  } catch (error) {
+    log.warn("Acceptance runner failed to start", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -223,6 +283,7 @@ async function main() {
     }
 
     if (result.ok) {
+      await runAcceptance(projectId, log);
       const summary = result.summary.trim();
 
       try {

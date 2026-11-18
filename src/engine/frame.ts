@@ -51,6 +51,23 @@ const PRESERVE = [
   "Verify the app before finishing, then summarize what changed.",
 ];
 
+const ACCEPTANCE_CONTRACT = `ACCEPTANCE PLAN
+Write acceptance.json at the workspace root. It is validated and executed with Playwright; keep it small and semantic.
+- 2 to 4 flows maximum, 25 steps maximum per flow.
+- Use accessible roles, labels, placeholders or visible text from your UI. Do not use generated CSS ids.
+- Cover the critical workflows you just built: create, edit, delete, search, filter, open a panel.
+- Do not include external network calls, payments or destructive system actions.
+
+Format:
+{"version":1,"flows":[{"name":"Créer un élément","steps":[
+  {"action":"click","locator":{"role":"button","name":"Nouveau"}},
+  {"action":"fill","locator":{"label":"Nom"},"value":"Test"},
+  {"action":"click","locator":{"role":"button","name":"Enregistrer"}},
+  {"action":"expectText","text":"Test"}
+]}]}
+
+Allowed actions: click, fill, select, press, expectText, expectHidden, reload, wait.`;
+
 export const TARGET_FRAMES: Record<GenerationTarget, TargetFrame> = {
   web: {
     id: "web",
@@ -127,6 +144,8 @@ export function buildSystemPrompt(
     frame.runtime,
     bullets(targetRules),
   ];
+
+  parts.push("", ACCEPTANCE_CONTRACT);
 
   if (designSystem?.trim()) {
     parts.push(

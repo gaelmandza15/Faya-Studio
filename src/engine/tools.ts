@@ -15,6 +15,7 @@ import {
 } from "./workspace";
 import { getTargetFrame, type TargetFrame } from "./frame";
 import { auditUiQuality, formatUiFindings } from "./ui-audit";
+import { readAcceptancePlan } from "./acceptance";
 import type { GenerationTarget } from "../lib/types";
 
 const execFileAsync = promisify(execFile);
@@ -29,6 +30,7 @@ export interface WorkspaceCheck {
 
 export interface ValidateWorkspaceOptions {
   target?: GenerationTarget;
+  requireAcceptance?: boolean;
 }
 
 interface SqliteDatabase {
@@ -378,6 +380,26 @@ export async function validateWorkspace(
   } catch (error) {
     notes.push(
       `UI QUALITY: audit could not run (${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
+
+  try {
+    const acceptance = await readAcceptancePlan(root);
+
+    if (acceptance.ok) {
+      notes.push(
+        `ACCEPTANCE: ${acceptance.plan.flows.length} flow(s) declared.`,
+      );
+    } else if (options.requireAcceptance || !acceptance.missing) {
+      errors.push(
+        `ACCEPTANCE PLAN:\n${acceptance.errors.join("\n")}`,
+      );
+    }
+  } catch (error) {
+    errors.push(
+      `ACCEPTANCE PLAN: could not read acceptance.json (${
+        error instanceof Error ? error.message : String(error)
+      }).`,
     );
   }
 

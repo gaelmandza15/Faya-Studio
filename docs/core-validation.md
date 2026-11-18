@@ -77,6 +77,6 @@ systématiquement.
 
 Le cœur fonctionne : décrire → générer → exécuter → lire/écrire → modifier →
 conserver. Les deux corrections essentielles sont le **timeout** et la
-**boucle de réparation**. La prochaine amélioration de cœur est un scénario
-d'acceptation généré avec l'application, exécuté par Playwright après chaque
-génération.
+**boucle de réparation**. La suite est en place : `acceptance.json` est exigé
+à la génération et le runner Playwright l'exécute après coup. Il reste à
+transformer son résultat en statut visible dans la fiche application.

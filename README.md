@@ -540,6 +540,20 @@ La checklist interactive reste indispensable : l'audit statique ne peut pas
 vérifier qu'un menu se ferme ou qu'un compteur se met à jour. Une validation
 E2E Playwright des applications générées est la prochaine étape naturelle.
 
+## Plans d'acceptation générés
+
+Chaque génération doit produire un `acceptance.json` décrivant 2 à 4 parcours
+critiques avec des rôles et libellés accessibles. Le runner Playwright les
+exécute sur un serveur statique local :
+
+```bash
+npm run acceptance -- <workspace-id>
+```
+
+Le worker lance ce contrôle après chaque génération ou modification réussie et
+écrit `.faya/acceptance-results.json`. Désactivable avec
+`FAYA_RUN_ACCEPTANCE=0`. Format et limites : [`docs/acceptance.md`](docs/acceptance.md).
+
 ## Tests E2E Playwright
 
 Le harnais Playwright vérifie la plateforme et une application fixture

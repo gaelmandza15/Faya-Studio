@@ -233,7 +233,7 @@ export async function generateApp({
 
     let summary =
       finishSummary || session.getLastAssistantText()?.trim() || "";
-    let check = await validateWorkspace(workspaceDir, { target });
+    let check = await validateWorkspace(workspaceDir, { target, requireAcceptance: mode === "generate" });
 
     // The agent sometimes stops before every referenced file is written.
     // Feed the validator report back and ask for a targeted repair before
@@ -263,7 +263,7 @@ export async function generateApp({
 
       summary =
         finishSummary || session.getLastAssistantText()?.trim() || summary;
-      check = await validateWorkspace(workspaceDir, { target });
+      check = await validateWorkspace(workspaceDir, { target, requireAcceptance: mode === "generate" });
     }
 
     const files = await listWorkspaceFiles(workspaceDir, 6);
