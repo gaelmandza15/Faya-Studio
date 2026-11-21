@@ -9,7 +9,7 @@ import {
 import { summarizeAcceptanceReport } from "@/engine/acceptance";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 export type RerunAcceptanceResult =
@@ -54,13 +54,14 @@ export async function rerunAcceptanceAction(
   projectId: string,
 ): Promise<RerunAcceptanceResult> {
   const workspace = await getWorkspaceContext();
+  const access = await getProjectAccess(workspace.user.id, projectId);
 
-  if (!can(workspace.organization.role, "project.update")) {
+  if (!access || !appCan(access.role, "write")) {
     return { error: "forbidden" };
   }
 
   const project = await db.project.findFirst({
-    where: { id: projectId, organizationId: workspace.organization.id },
+    where: { id: projectId, organizationId: access.organizationId },
     select: { id: true, status: true, organizationId: true },
   });
 

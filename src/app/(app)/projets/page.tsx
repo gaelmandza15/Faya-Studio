@@ -3,6 +3,11 @@ import { ProjectsView } from "@/components/projects/projects-view";
 import { formatRelativeTime } from "@/i18n/format";
 import { getI18n } from "@/i18n/server";
 import { db } from "@/lib/db";
+import {
+  appCan,
+  effectiveAppRole,
+  projectVisibilityWhere,
+} from "@/lib/project-access";
 import { toProjectIcon } from "@/lib/project-utils";
 import type { Project } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -17,24 +22,45 @@ export default async function ProjetsPage() {
   const workspace = await getWorkspaceContext();
 
   const dbProjects = await db.project.findMany({
-    where: { organizationId: workspace.organization.id },
+    where: projectVisibilityWhere(
+      workspace.user.id,
+      workspace.organization.id,
+      workspace.organization.role,
+    ),
+    include: {
+      members: {
+        where: { userId: workspace.user.id },
+        select: { role: true },
+        take: 1,
+      },
+    },
     orderBy: { lastActivityAt: "desc" },
   });
 
-  const projects: Project[] = dbProjects.map((project) => ({
-    id: project.id,
-    name: project.name,
-    prompt: project.prompt,
-    icon: toProjectIcon(project.icon),
-    status:
-      project.status === "ready"
-        ? "ready"
-        : project.status === "error"
-          ? "error"
-          : "generating",
-    modified: `${dict.common.modified} ${formatRelativeTime(locale, project.lastActivityAt)}`,
-    href: `/creer?project=${project.id}`,
-  }));
+  const projects: Project[] = dbProjects.map((project) => {
+    const role = effectiveAppRole(
+      workspace.organization.role,
+      project.accessMode,
+      project.members[0]?.role,
+    );
+
+    return {
+      id: project.id,
+      name: project.name,
+      prompt: project.prompt,
+      icon: toProjectIcon(project.icon),
+      status:
+        project.status === "ready"
+          ? "ready"
+          : project.status === "error"
+            ? "error"
+            : "generating",
+      modified: `${dict.common.modified} ${formatRelativeTime(locale, project.lastActivityAt)}`,
+      href: appCan(role, "write")
+        ? `/creer?project=${project.id}`
+        : `/applications/${project.id}`,
+    };
+  });
 
   return <ProjectsView projects={projects} />;
 }

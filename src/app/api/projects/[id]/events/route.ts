@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth/session";
-import { db } from "@/lib/db";
 import { assertWorkspaceId } from "@/engine/workspace";
 import { subscribeProject } from "@/lib/project-events";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 
 export async function GET(
   _request: Request,
@@ -19,26 +19,9 @@ export async function GET(
     return new Response("Invalid project id", { status: 400 });
   }
 
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    select: { organizationId: true },
-  });
+  const access = await getProjectAccess(session.userId, projectId);
 
-  if (!project) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  const membership = await db.membership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.userId,
-        organizationId: project.organizationId,
-      },
-    },
-    select: { role: true },
-  });
-
-  if (!membership) {
+  if (!access || !appCan(access.role, "view")) {
     return new Response("Forbidden", { status: 403 });
   }
 

@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { getSession } from "@/lib/auth/session";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import {
   assertWorkspaceId,
   getWorkspacesRoot,
@@ -43,6 +44,12 @@ export async function GET(
     assertWorkspaceId(id);
   } catch {
     return new Response("Invalid workspace id", { status: 400 });
+  }
+
+  const access = await getProjectAccess(session.userId, id);
+
+  if (!access || !appCan(access.role, "view")) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const root = path.join(getWorkspacesRoot(), id);

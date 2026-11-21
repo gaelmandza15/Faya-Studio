@@ -9,8 +9,8 @@ import { getWorkspacesRoot } from "@/engine/workspace";
 import { getI18n } from "@/i18n/server";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { getProjectAccess } from "@/lib/project-access";
 import { toProjectIcon } from "@/lib/project-utils";
-import { getWorkspaceContext } from "@/lib/workspace";
 
 type AppRunnerPageProps = {
   params: Promise<{ id: string }>;
@@ -20,6 +20,13 @@ export async function generateMetadata({
   params,
 }: AppRunnerPageProps): Promise<Metadata> {
   const { id } = await params;
+  const session = await getSession();
+  const access = session ? await getProjectAccess(session.user.id, id) : null;
+
+  if (!access || !access.allowed) {
+    return { title: "Application" };
+  }
+
   const project = await db.project.findUnique({
     where: { id },
     select: { name: true },
@@ -48,13 +55,18 @@ export default async function AppRunnerPage({ params }: AppRunnerPageProps) {
   }
 
   const { id } = await params;
-  const workspace = await getWorkspaceContext();
   const { dict } = await getI18n();
+
+  const access = await getProjectAccess(session.user.id, id);
+
+  if (!access || !access.allowed) {
+    notFound();
+  }
 
   const project = await db.project.findFirst({
     where: {
       id,
-      organizationId: workspace.organization.id,
+      organizationId: access.organizationId,
     },
     select: {
       id: true,

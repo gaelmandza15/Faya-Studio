@@ -297,6 +297,23 @@ export const fr = {
         "Vous pouvez consulter les sauvegardes, mais pas les gérer.",
       error: "L'opération a échoué. Réessayez.",
     },
+    access: {
+      section: "Utilisateurs de l'application",
+      hint:
+        "Choisissez qui peut ouvrir cette application et ce que chacun peut y faire. Les administrateurs de l'organisation gardent toujours l'accès.",
+      modeOrganization: "Toute l'organisation",
+      modeRestricted: "Membres sélectionnés",
+      organizationHint:
+        "Tous les membres de l'organisation peuvent ouvrir l'application. Leur rôle d'organisation détermine leurs droits : lecteur, éditeur ou administrateur.",
+      restrictedHint:
+        "Seuls les membres ajoutés ci-dessous et les administrateurs de l'organisation peuvent accéder à cette application.",
+      add: "Ajouter",
+      remove: "Retirer",
+      noAccess: "Aucun accès",
+      viewerHint:
+        "Vous pouvez consulter les accès, mais pas les modifier.",
+      error: "L'opération a échoué. Réessayez.",
+    },
     quality: {
       section: "Qualité de l'application",
       hint:

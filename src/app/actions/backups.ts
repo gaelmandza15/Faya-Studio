@@ -12,7 +12,7 @@ import {
 } from "@/engine/backups";
 import { db } from "@/lib/db";
 import { broadcastProjectUpdate } from "@/lib/project-events";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 export type CreateBackupResult =
@@ -42,13 +42,14 @@ type LoadedProject =
 
 async function loadProject(projectId: string): Promise<LoadedProject> {
   const workspace = await getWorkspaceContext();
+  const access = await getProjectAccess(workspace.user.id, projectId);
 
-  if (!can(workspace.organization.role, "project.update")) {
+  if (!access || !appCan(access.role, "manage")) {
     return { error: "forbidden" as const };
   }
 
   const project = await db.project.findFirst({
-    where: { id: projectId, organizationId: workspace.organization.id },
+    where: { id: projectId, organizationId: access.organizationId },
     select: { id: true, name: true, syncEnabled: true },
   });
 

@@ -145,6 +145,20 @@ Objectif : valider la plateforme dans des conditions réelles.
 
 Objectif : tenir la promesse « application liée, mise à jour, partagée ».
 
+### 3.7 Utilisateurs et permissions par application — livrée
+
+- `Project.accessMode` : toute l'organisation (défaut) ou membres sélectionnés ;
+- `ProjectMember` avec rôles `viewer`, `editor`, `admin` ;
+- rôles appliqués aux pages, routes API, SSE, téléchargements et server
+  actions ;
+- listes filtrées selon l'accès, cartes dirigées vers la fiche pour les
+  lecteurs ;
+- carte **Utilisateurs de l'application** pour ajouter, changer ou retirer un
+  membre ;
+- les administrateurs de l'organisation conservent toujours l'accès admin.
+
+Voir [`docs/access.md`](access.md).
+
 ### 3.6 Porte de qualité d'exécution — livrée
 
 - `acceptance.json` exécuté dans le document réel du runner, Web Bridge inclus ;

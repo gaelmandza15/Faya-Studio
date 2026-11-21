@@ -13,6 +13,7 @@ import {
   CREDIT_REFUND_REASONS,
 } from "@/lib/credit-costs";
 import { toProjectIcon } from "@/lib/project-utils";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { can } from "@/lib/roles";
 import type { ProjectIcon } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -187,11 +188,16 @@ export async function startProjectAction(input: {
 export async function markProjectReadyAction(projectId: string) {
   try {
     const workspace = await getWorkspaceContext();
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" as const };
+    }
 
     await db.project.updateMany({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
       data: {
         status: "ready",
@@ -219,15 +225,16 @@ export async function renameProjectAction(
 
   try {
     const workspace = await getWorkspaceContext();
+    const access = await getProjectAccess(workspace.user.id, projectId);
 
-    if (!can(workspace.organization.role, "project.update")) {
+    if (!access || !appCan(access.role, "write")) {
       return { error: "forbidden" };
     }
 
     const result = await db.project.updateMany({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
       data: {
         name: parsedName.data,
@@ -257,10 +264,16 @@ export async function duplicateProjectAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 
@@ -302,6 +315,12 @@ export async function deleteProjectAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "manage")) {
+      return { error: "forbidden" };
+    }
+
     const publication = await db.publication.findUnique({
       where: { projectId },
       select: { slug: true },
@@ -310,7 +329,7 @@ export async function deleteProjectAction(
     const result = await db.project.deleteMany({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 
@@ -340,10 +359,16 @@ export async function retryGenerationAction(projectId: string) {
       return { error: "forbidden" as const };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" as const };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 

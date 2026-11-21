@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { getProjectBackupPath } from "@/engine/backups";
 
 export async function GET(
@@ -27,17 +27,9 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const membership = await db.membership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.userId,
-        organizationId: project.organizationId,
-      },
-    },
-    select: { role: true },
-  });
+  const access = await getProjectAccess(session.userId, projectId);
 
-  if (!membership || !can(membership.role, "project.update")) {
+  if (!access || !appCan(access.role, "manage")) {
     return new Response("Forbidden", { status: 403 });
   }
 

@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppLinkCard } from "@/components/applications/app-link-card";
+import { AccessCard } from "@/components/applications/access-card";
 import { BackupsCard } from "@/components/applications/backups-card";
 import { ConnectionsCard } from "@/components/applications/connections-card";
 import { QualityCard } from "@/components/applications/quality-card";
@@ -25,7 +26,12 @@ import { formatDate, formatRelativeTime } from "@/i18n/format";
 import { getI18n } from "@/i18n/server";
 import { db } from "@/lib/db";
 import { toProjectIcon } from "@/lib/project-utils";
-import { can } from "@/lib/roles";
+import {
+  appCan,
+  asAppRole,
+  effectiveAppRole,
+  getProjectAccess,
+} from "@/lib/project-access";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 type ApplicationPageProps = {
@@ -109,6 +115,9 @@ export default async function ApplicationDetailPage({
         orderBy: { createdAt: "desc" },
         take: 20,
       },
+      members: {
+        select: { userId: true, role: true },
+      },
       _count: {
         select: { versions: true, builds: true },
       },
@@ -119,10 +128,20 @@ export default async function ApplicationDetailPage({
     notFound();
   }
 
-  const [memberCount, generationCharges, buildCharges] =
+  const [organizationMembers, generationCharges, buildCharges] =
     await Promise.all([
-      db.membership.count({
+      db.membership.findMany({
         where: { organizationId: workspace.organization.id },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
       }),
       db.generationJob.findMany({
         where: { projectId: id, creditTransactionId: { not: null } },
@@ -133,6 +152,8 @@ export default async function ApplicationDetailPage({
         select: { creditTransactionId: true },
       }),
     ]);
+
+  const memberCount = organizationMembers.length;
 
   const chargeIds = [
     ...generationCharges.map((job) => job.creditTransactionId),
@@ -155,7 +176,37 @@ export default async function ApplicationDetailPage({
 
   const isReady = project.status === "ready";
   const isError = project.status === "error";
-  const canManage = can(workspace.organization.role, "project.update");
+  const access = await getProjectAccess(workspace.user.id, id);
+
+  if (!access || !access.allowed) {
+    notFound();
+  }
+
+  const canEdit = appCan(access.role, "write");
+  const canManage = appCan(access.role, "manage");
+
+  const explicitRoles = new Map(
+    project.members.map((member) => [member.userId, member.role]),
+  );
+  const accessRows = organizationMembers.map((membership) => {
+    const explicitRole = asAppRole(explicitRoles.get(membership.userId));
+
+    return {
+      userId: membership.userId,
+      name: `${membership.user.firstName} ${membership.user.lastName}`,
+      email: membership.user.email,
+      organizationRole: membership.role,
+      appRole: effectiveAppRole(
+        membership.role,
+        project.accessMode,
+        explicitRole,
+      ),
+      explicitRole,
+      isOrganizationAdmin:
+        membership.role === "owner" || membership.role === "admin",
+      isSelf: membership.userId === workspace.user.id,
+    };
+  });
   const headerList = await headers();
   const platformUrl = (
     process.env.FAYA_PLATFORM_URL ??
@@ -284,17 +335,19 @@ export default async function ApplicationDetailPage({
                 {dict.applicationsPage.downloadExe}
               </a>
             )}
-            <Link
-              href={`/creer?project=${project.id}`}
-              className={
-                isReady
-                  ? "flex items-center gap-1.5 rounded-xl border border-white/15 bg-[#141d24] px-3.5 py-2.5 text-[12px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
-                  : "flex items-center gap-1.5 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c]"
-              }
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {dict.applicationsPage.openInEditor}
-            </Link>
+            {canEdit && (
+              <Link
+                href={`/creer?project=${project.id}`}
+                className={
+                  isReady
+                    ? "flex items-center gap-1.5 rounded-xl border border-white/15 bg-[#141d24] px-3.5 py-2.5 text-[12px] font-medium text-slate-200 transition hover:bg-[#1a242d]"
+                    : "flex items-center gap-1.5 rounded-xl bg-[#1be67a] px-4 py-2.5 text-[13px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(27,230,122,0.25)] transition hover:bg-[#16cf6c]"
+                }
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {dict.applicationsPage.openInEditor}
+              </Link>
+            )}
           </div>
         </div>
 
@@ -608,9 +661,20 @@ export default async function ApplicationDetailPage({
         </div>
 
         <div className="mt-5 space-y-5">
+          <AccessCard
+            projectId={project.id}
+            accessMode={
+              project.accessMode === "restricted"
+                ? "restricted"
+                : "organization"
+            }
+            canManage={canManage}
+            members={accessRows}
+          />
+
           <QualityCard
             projectId={project.id}
-            canManage={canManage}
+            canManage={canEdit}
             appStatus={project.status}
             status={project.acceptanceStatus}
             passed={project.acceptancePassed}

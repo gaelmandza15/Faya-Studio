@@ -8,6 +8,7 @@ import {
 import { createProjectVersion } from "@/engine/versions";
 import { db } from "@/lib/db";
 import { isValidPublicationSlug, slugify } from "@/lib/publication-utils";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { can } from "@/lib/roles";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -51,10 +52,16 @@ export async function publishProjectAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 
@@ -151,10 +158,16 @@ export async function unpublishProjectAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" };
+    }
+
     const publication = await db.publication.findFirst({
       where: {
         projectId,
-        project: { organizationId: workspace.organization.id },
+        project: { organizationId: access.organizationId },
       },
     });
 

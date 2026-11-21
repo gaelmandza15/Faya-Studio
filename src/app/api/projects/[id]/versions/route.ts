@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 
 export async function GET(
   _request: Request,
@@ -12,6 +13,12 @@ export async function GET(
   }
 
   const { id } = await params;
+
+  const access = await getProjectAccess(session.userId, id);
+
+  if (!access || !appCan(access.role, "view")) {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const project = await db.project.findFirst({
     where: {

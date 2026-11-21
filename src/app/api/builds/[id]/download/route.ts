@@ -3,6 +3,7 @@ import path from "node:path";
 import { getSession } from "@/lib/auth/session";
 import { getWorkspacesRoot } from "@/engine/workspace";
 import { db } from "@/lib/db";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 
 export async function GET(
   _request: Request,
@@ -31,6 +32,12 @@ export async function GET(
 
   if (!job || job.status !== "done" || !job.artifactName) {
     return new Response("Not found", { status: 404 });
+  }
+
+  const access = await getProjectAccess(session.userId, job.projectId);
+
+  if (!access || !appCan(access.role, "write")) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const artifactPath = path.resolve(

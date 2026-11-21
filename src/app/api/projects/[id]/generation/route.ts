@@ -4,6 +4,7 @@ import type { EngineEvent } from "@/engine/pi-engine";
 import { getWorkspacesRoot } from "@/engine/workspace";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 
 async function readEvents(
   eventsPath: string,
@@ -38,6 +39,12 @@ export async function GET(
   }
 
   const { id } = await params;
+
+  const access = await getProjectAccess(session.userId, id);
+
+  if (!access || !appCan(access.role, "write")) {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const project = await db.project.findFirst({
     where: {

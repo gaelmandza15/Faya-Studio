@@ -9,7 +9,7 @@ import {
   restoreProjectFiles,
 } from "@/engine/versions";
 import { db } from "@/lib/db";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { getWorkspaceContext } from "@/lib/workspace";
 
 export type RestoreProjectVersionResult =
@@ -23,14 +23,16 @@ export async function restoreProjectVersionAction(
   try {
     const workspace = await getWorkspaceContext();
 
-    if (!can(workspace.organization.role, "version.restore")) {
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "manage")) {
       return { error: "forbidden" };
     }
 
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 

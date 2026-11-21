@@ -7,7 +7,7 @@ import {
   rotateAppKey,
 } from "@/lib/app-link";
 import { db } from "@/lib/db";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { isValidWebhookUrl, notifyProjectWebhooks } from "@/lib/webhooks";
 
@@ -49,13 +49,14 @@ type LoadedProject =
 
 async function loadProject(projectId: string): Promise<LoadedProject> {
   const workspace = await getWorkspaceContext();
+  const access = await getProjectAccess(workspace.user.id, projectId);
 
-  if (!can(workspace.organization.role, "project.update")) {
+  if (!access || !appCan(access.role, "manage")) {
     return { error: "forbidden" as const };
   }
 
   const project = await db.project.findFirst({
-    where: { id: projectId, organizationId: workspace.organization.id },
+    where: { id: projectId, organizationId: access.organizationId },
     select: { id: true, name: true, appKey: true, syncEnabled: true },
   });
 

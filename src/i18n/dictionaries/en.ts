@@ -294,6 +294,22 @@ export const en: Dictionary = {
       viewerHint: "You can view backups, but not manage them.",
       error: "The operation failed. Try again.",
     },
+    access: {
+      section: "Application users",
+      hint:
+        "Choose who can open this application and what each person can do. Organization administrators always keep access.",
+      modeOrganization: "Whole organization",
+      modeRestricted: "Selected members",
+      organizationHint:
+        "Every organization member can open the application. Their organization role determines their rights: viewer, editor or administrator.",
+      restrictedHint:
+        "Only the members added below and organization administrators can access this application.",
+      add: "Add",
+      remove: "Remove",
+      noAccess: "No access",
+      viewerHint: "You can view access, but not change it.",
+      error: "The operation failed. Try again.",
+    },
     quality: {
       section: "Application quality",
       hint:

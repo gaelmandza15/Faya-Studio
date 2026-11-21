@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { can } from "@/lib/roles";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { rateLimit } from "@/lib/rate-limit";
 import { inspectSql } from "@/lib/sql-guard";
 import { assertWorkspaceId } from "@/engine/workspace";
@@ -85,7 +85,8 @@ export async function POST(
     return NextResponse.json({ error: "ID de projet invalide" }, { status: 400 });
   }
 
-  // Verify that the user belongs to the organization that owns this project
+  // Verify the effective application role (organization mode or explicit
+  // ProjectMember in restricted mode).
   const project = await db.project.findUnique({
     where: { id: projectId },
     select: { organizationId: true, syncEnabled: true },
@@ -95,17 +96,9 @@ export async function POST(
     return NextResponse.json({ error: "Projet introuvable" }, { status: 404 });
   }
 
-  const membership = await db.membership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.userId,
-        organizationId: project.organizationId,
-      },
-    },
-    select: { role: true },
-  });
+  const access = await getProjectAccess(session.userId, projectId);
 
-  if (!membership) {
+  if (!access || !appCan(access.role, "view")) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
@@ -147,9 +140,9 @@ export async function POST(
     return NextResponse.json({ error: inspection.error }, { status: 400 });
   }
 
-  // RBAC checks: viewer can only execute read queries
-  if (inspection.kind === "write" && !can(membership.role, "project.update")) {
-    log.warn("Write blocked by RBAC", { cmd, role: membership.role });
+  // App-level RBAC: viewers can only execute read queries.
+  if (inspection.kind === "write" && !appCan(access.role, "write")) {
+    log.warn("Write blocked by app RBAC", { cmd, role: access.role });
     return NextResponse.json(
       { error: "Votre rôle ne permet pas de modifier les données de cette application" },
       { status: 403 },

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getWorkspaceContext } from "@/lib/workspace";
 import { db } from "@/lib/db";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { enqueueBuild } from "@/engine/build-jobs";
 import { chargeCredits, refundCredits } from "@/engine/credits";
 import {
@@ -33,10 +34,16 @@ export async function exportProjectAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 

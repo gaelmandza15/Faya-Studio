@@ -12,6 +12,7 @@ import {
   CREDIT_REFUND_REASONS,
 } from "@/lib/credit-costs";
 import { db } from "@/lib/db";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import { can } from "@/lib/roles";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -47,10 +48,16 @@ export async function sendProjectMessageAction(
       return { error: "forbidden" };
     }
 
+    const access = await getProjectAccess(workspace.user.id, projectId);
+
+    if (!access || !appCan(access.role, "write")) {
+      return { error: "forbidden" };
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectId,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 

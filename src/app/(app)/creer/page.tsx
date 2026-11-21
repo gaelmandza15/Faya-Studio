@@ -10,6 +10,7 @@ import { getWorkspacesRoot } from "@/engine/workspace";
 import { getI18n } from "@/i18n/server";
 import { db } from "@/lib/db";
 import { getDemoData } from "@/lib/mock-data";
+import { appCan, getProjectAccess } from "@/lib/project-access";
 import type { ProjectStatus } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
 
@@ -64,10 +65,16 @@ async function EditorFromParams({
 
   if (projectParam) {
     const workspace = await getWorkspaceContext();
+    const access = await getProjectAccess(workspace.user.id, projectParam);
+
+    if (!access || !appCan(access.role, "write")) {
+      notFound();
+    }
+
     const project = await db.project.findFirst({
       where: {
         id: projectParam,
-        organizationId: workspace.organization.id,
+        organizationId: access.organizationId,
       },
     });
 

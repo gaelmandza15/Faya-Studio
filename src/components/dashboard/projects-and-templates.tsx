@@ -6,6 +6,11 @@ import { formatRelativeTime } from "@/i18n/format";
 import { getI18n } from "@/i18n/server";
 import { db } from "@/lib/db";
 import { getDemoData } from "@/lib/mock-data";
+import {
+  appCan,
+  effectiveAppRole,
+  projectVisibilityWhere,
+} from "@/lib/project-access";
 import { toProjectIcon } from "@/lib/project-utils";
 import type { Project } from "@/lib/types";
 import { getWorkspaceContext } from "@/lib/workspace";
@@ -16,19 +21,40 @@ export async function ProjectsAndTemplates() {
   const workspace = await getWorkspaceContext();
 
   const dbProjects = await db.project.findMany({
-    where: { organizationId: workspace.organization.id },
+    where: projectVisibilityWhere(
+      workspace.user.id,
+      workspace.organization.id,
+      workspace.organization.role,
+    ),
+    include: {
+      members: {
+        where: { userId: workspace.user.id },
+        select: { role: true },
+        take: 1,
+      },
+    },
     orderBy: { lastActivityAt: "desc" },
     take: 4,
   });
 
-  const projects: Project[] = dbProjects.map((project) => ({
-    id: project.id,
-    name: project.name,
-    prompt: project.prompt,
-    icon: toProjectIcon(project.icon),
-    modified: `${dict.common.modified} ${formatRelativeTime(locale, project.lastActivityAt)}`,
-    href: `/creer?project=${project.id}`,
-  }));
+  const projects: Project[] = dbProjects.map((project) => {
+    const role = effectiveAppRole(
+      workspace.organization.role,
+      project.accessMode,
+      project.members[0]?.role,
+    );
+
+    return {
+      id: project.id,
+      name: project.name,
+      prompt: project.prompt,
+      icon: toProjectIcon(project.icon),
+      modified: `${dict.common.modified} ${formatRelativeTime(locale, project.lastActivityAt)}`,
+      href: appCan(role, "write")
+        ? `/creer?project=${project.id}`
+        : `/applications/${project.id}`,
+    };
+  });
 
   return (
     <section className="grid grid-cols-1 gap-5 xl:grid-cols-12">
